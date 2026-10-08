@@ -3090,7 +3090,7 @@ export const AdminSuitePage: React.FC = () => {
                   setShowSwitchModal(false);
                 }}
                 className={`w-full flex items-center gap-3 p-3 sm:p-3.5 rounded-2xl border text-left transition active:scale-98 ${
-                  currentUser.role === 'customer'
+                  currentUser?.role === 'customer'
                     ? 'border-emerald-500 bg-emerald-50/70 shadow-2xs ring-1 ring-emerald-400'
                     : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300'
                 }`}
@@ -3103,7 +3103,7 @@ export const AdminSuitePage: React.FC = () => {
                     <h4 className="text-xs font-bold text-slate-900 truncate">
                       1. Customer (Pembeli/Pelanggan)
                     </h4>
-                    {currentUser.role === 'customer' && (
+                    {currentUser?.role === 'customer' && (
                       <span className="text-[9px] font-extrabold bg-emerald-600 text-white px-1.5 py-0.5 rounded-md shrink-0 flex items-center gap-0.5">
                         <Check className="w-2.5 h-2.5 stroke-[3]" />
                         <span>Aktif</span>
@@ -3124,7 +3124,7 @@ export const AdminSuitePage: React.FC = () => {
                   setShowSwitchModal(false);
                 }}
                 className={`w-full flex items-center gap-3 p-3 sm:p-3.5 rounded-2xl border text-left transition active:scale-98 ${
-                  currentUser.role === 'merchant'
+                  currentUser?.role === 'merchant'
                     ? 'border-blue-500 bg-blue-50/70 shadow-2xs ring-1 ring-blue-400'
                     : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300'
                 }`}
@@ -3137,7 +3137,7 @@ export const AdminSuitePage: React.FC = () => {
                     <h4 className="text-xs font-bold text-slate-900 truncate">
                       2. Merchant (Pemilik Toko/UMKM)
                     </h4>
-                    {currentUser.role === 'merchant' && (
+                    {currentUser?.role === 'merchant' && (
                       <span className="text-[9px] font-extrabold bg-blue-600 text-white px-1.5 py-0.5 rounded-md shrink-0 flex items-center gap-0.5">
                         <Check className="w-2.5 h-2.5 stroke-[3]" />
                         <span>Aktif</span>
@@ -3158,7 +3158,7 @@ export const AdminSuitePage: React.FC = () => {
                   setShowSwitchModal(false);
                 }}
                 className={`w-full flex items-center gap-3 p-3 sm:p-3.5 rounded-2xl border text-left transition active:scale-98 ${
-                  currentUser.role === 'driver'
+                  currentUser?.role === 'driver'
                     ? 'border-amber-500 bg-amber-50/70 shadow-2xs ring-1 ring-amber-400'
                     : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300'
                 }`}
@@ -3171,7 +3171,7 @@ export const AdminSuitePage: React.FC = () => {
                     <h4 className="text-xs font-bold text-slate-900 truncate">
                       3. Driver (Kurir Singkawang)
                     </h4>
-                    {currentUser.role === 'driver' && (
+                    {currentUser?.role === 'driver' && (
                       <span className="text-[9px] font-extrabold bg-amber-600 text-white px-1.5 py-0.5 rounded-md shrink-0 flex items-center gap-0.5">
                         <Check className="w-2.5 h-2.5 stroke-[3]" />
                         <span>Aktif</span>
@@ -3192,7 +3192,7 @@ export const AdminSuitePage: React.FC = () => {
                   setShowSwitchModal(false);
                 }}
                 className={`w-full flex items-center gap-3 p-3 sm:p-3.5 rounded-2xl border text-left transition active:scale-98 ${
-                  currentUser.role === 'admin'
+                  currentUser?.role === 'admin'
                     ? 'border-rose-500 bg-rose-50/70 shadow-2xs ring-1 ring-rose-400'
                     : 'border-slate-200 hover:bg-slate-50 hover:border-slate-300'
                 }`}
@@ -3205,7 +3205,7 @@ export const AdminSuitePage: React.FC = () => {
                     <h4 className="text-xs font-bold text-slate-900 truncate">
                       4. Super Admin PAYKAJASTIP
                     </h4>
-                    {currentUser.role === 'admin' && (
+                    {currentUser?.role === 'admin' && (
                       <span className="text-[9px] font-extrabold bg-rose-600 text-white px-1.5 py-0.5 rounded-md shrink-0 flex items-center gap-0.5">
                         <Check className="w-2.5 h-2.5 stroke-[3]" />
                         <span>Aktif</span>

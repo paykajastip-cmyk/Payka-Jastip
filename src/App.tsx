@@ -23,7 +23,7 @@ import { SingkawangMap } from './components/Map/SingkawangMap';
 import { Store, Product, Order } from './types';
 
 const MainAppContent: React.FC = () => {
-  const { currentUser } = useApp();
+  const { currentUser, canAccessMerchant, canAccessDriver, canAccessAdmin } = useApp();
 
   const [activeTab, setActiveTab] = useState<string>('home');
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
@@ -143,6 +143,7 @@ const MainAppContent: React.FC = () => {
               onSelectStore={(st) => {
                 handleSelectStore(st);
               }}
+              onNavigateToJastip={() => setActiveTab('jastip')}
             />
           </div>
         )}
@@ -165,16 +166,156 @@ const MainAppContent: React.FC = () => {
           />
         )}
 
-        {/* 13. DRIVER PORTAL */}
-        {activeTab === 'driver' && <DriverPortalPage />}
+        {/* 13. DRIVER PORTAL - STRICT ACCESS CONTROL */}
+        {activeTab === 'driver' && (
+          canAccessDriver ? (
+            <DriverPortalPage />
+          ) : currentUser?.role === 'driver' && currentUser.approval_status === 'pending' ? (
+            <div className="py-16 text-center space-y-4 bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
+              <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto text-2xl">
+                ⏳
+              </div>
+              <h2 className="text-lg font-black text-slate-900">Menunggu Persetujuan Admin</h2>
+              <p className="text-xs text-slate-600 max-w-md mx-auto">
+                Pendaftaran Driver berhasil. Akun Anda sedang menunggu persetujuan Admin sebelum dapat mengakses dashboard tugas.
+              </p>
+              <button
+                onClick={() => setActiveTab('home')}
+                className="px-5 py-2.5 rounded-xl bg-sky-600 text-white font-bold text-xs"
+              >
+                Kembali ke Beranda
+              </button>
+            </div>
+          ) : currentUser?.role === 'driver' && currentUser.approval_status === 'rejected' ? (
+            <div className="py-16 text-center space-y-4 bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
+              <div className="w-16 h-16 rounded-3xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto text-2xl">
+                ❌
+              </div>
+              <h2 className="text-lg font-black text-slate-900">Pendaftaran Driver Ditolak</h2>
+              <p className="text-xs text-slate-600 max-w-md mx-auto">
+                {currentUser.rejection_reason || 'Pendaftaran driver belum memenuhi persyaratan berkas.'}
+              </p>
+              <button
+                onClick={() => setActiveTab('profile')}
+                className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs"
+              >
+                Buka Profil
+              </button>
+            </div>
+          ) : (
+            <div className="py-16 text-center space-y-4 bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
+              <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto text-2xl">
+                🛵
+              </div>
+              <h2 className="text-lg font-black text-slate-900">Portal Mitra Driver</h2>
+              <p className="text-xs text-slate-600 max-w-md mx-auto">
+                Anda perlu mendaftar atau masuk sebagai Driver resmi untuk mengakses tugas pengantaran.
+              </p>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => setActiveTab('profile')}
+                  className="px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs"
+                >
+                  Daftar sebagai Driver
+                </button>
+                <button
+                  onClick={() => setActiveTab('home')}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs"
+                >
+                  Ke Beranda
+                </button>
+              </div>
+            </div>
+          )
+        )}
 
-        {/* 14. MERCHANT PORTAL */}
-        {activeTab === 'merchant' && <MerchantPortalPage />}
+        {/* 14. MERCHANT PORTAL - STRICT ACCESS CONTROL */}
+        {activeTab === 'merchant' && (
+          canAccessMerchant ? (
+            <MerchantPortalPage />
+          ) : currentUser?.role === 'merchant' && currentUser.approval_status === 'pending' ? (
+            <div className="py-16 text-center space-y-4 bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
+              <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto text-2xl">
+                ⏳
+              </div>
+              <h2 className="text-lg font-black text-slate-900">Menunggu Persetujuan Admin</h2>
+              <p className="text-xs text-slate-600 max-w-md mx-auto">
+                Pendaftaran Merchant berhasil. Akun Anda sedang menunggu persetujuan Admin sebelum dapat mengakses dashboard toko.
+              </p>
+              <button
+                onClick={() => setActiveTab('home')}
+                className="px-5 py-2.5 rounded-xl bg-sky-600 text-white font-bold text-xs"
+              >
+                Kembali ke Beranda
+              </button>
+            </div>
+          ) : currentUser?.role === 'merchant' && currentUser.approval_status === 'rejected' ? (
+            <div className="py-16 text-center space-y-4 bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
+              <div className="w-16 h-16 rounded-3xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto text-2xl">
+                ❌
+              </div>
+              <h2 className="text-lg font-black text-slate-900">Pendaftaran Merchant Ditolak</h2>
+              <p className="text-xs text-slate-600 max-w-md mx-auto">
+                {currentUser.rejection_reason || 'Pendaftaran toko belum disetujui oleh admin.'}
+              </p>
+              <button
+                onClick={() => setActiveTab('profile')}
+                className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs"
+              >
+                Buka Profil / Ajukan Ulang
+              </button>
+            </div>
+          ) : (
+            <div className="py-16 text-center space-y-4 bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
+              <div className="w-16 h-16 rounded-3xl bg-blue-100 text-blue-700 flex items-center justify-center mx-auto text-2xl">
+                🏪
+              </div>
+              <h2 className="text-lg font-black text-slate-900">Portal Mitra Merchant</h2>
+              <p className="text-xs text-slate-600 max-w-md mx-auto">
+                Anda perlu mendaftar atau masuk sebagai Merchant resmi untuk mengakses dashboard toko.
+              </p>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={() => setActiveTab('profile')}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs"
+                >
+                  Daftar sebagai Merchant
+                </button>
+                <button
+                  onClick={() => setActiveTab('home')}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs"
+                >
+                  Ke Beranda
+                </button>
+              </div>
+            </div>
+          )
+        )}
 
-        {/* 15. ADMIN SUITE */}
-        {activeTab === 'admin' && <AdminSuitePage />}
+        {/* 15. ADMIN SUITE - STRICT ACCESS CONTROL */}
+        {activeTab === 'admin' && (
+          canAccessAdmin ? (
+            <AdminSuitePage />
+          ) : (
+            <div className="py-16 text-center space-y-4 bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
+              <div className="w-16 h-16 rounded-3xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto text-2xl">
+                🛡️
+              </div>
+              <h2 className="text-lg font-black text-slate-900">Akses Admin Ditolak</h2>
+              <p className="text-xs text-slate-600 max-w-md mx-auto">
+                Halaman ini dilindungi dan hanya dapat diakses oleh akun resmi paykajastip@gmail.com.
+              </p>
+              <button
+                onClick={() => setActiveTab('home')}
+                className="px-5 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs"
+              >
+                Kembali ke Beranda
+              </button>
+            </div>
+          )
+        )}
 
-        {/* 16. PROFILE & ROLE SWITCHER */}
+        {/* 16. PROFILE & ACCOUNT */}
         {activeTab === 'profile' && <ProfilePage setActiveTab={setActiveTab} />}
       </main>
 

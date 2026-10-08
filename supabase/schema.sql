@@ -13,10 +13,36 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   full_name TEXT NOT NULL,
   phone TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'customer' CHECK (role IN ('customer', 'merchant', 'driver', 'admin')),
+  approval_status TEXT NOT NULL DEFAULT 'approved' CHECK (approval_status IN ('pending', 'approved', 'rejected')),
   avatar_url TEXT,
+  rejection_reason TEXT,
+  store_name TEXT,
+  store_address TEXT,
+  district TEXT,
+  city TEXT,
+  store_description TEXT,
+  opening_hours TEXT,
+  vehicle_type TEXT,
+  vehicle_plate TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Trigger to strictly guarantee ONLY paykajastip@gmail.com can hold admin role
+CREATE OR REPLACE FUNCTION public.enforce_admin_email()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.role = 'admin' AND LOWER(NEW.email) != 'paykajastip@gmail.com' THEN
+    NEW.role := 'customer';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_enforce_admin_email ON public.profiles;
+CREATE TRIGGER trg_enforce_admin_email
+BEFORE INSERT OR UPDATE ON public.profiles
+FOR EACH ROW EXECUTE FUNCTION public.enforce_admin_email();
 
 -- 2. MERCHANT PROFILES
 CREATE TABLE IF NOT EXISTS public.merchant_profiles (
@@ -96,6 +122,7 @@ CREATE TABLE IF NOT EXISTS public.products (
 CREATE TABLE IF NOT EXISTS public.orders (
   id TEXT PRIMARY KEY DEFAULT ('ord-' || uuid_generate_v4()::text),
   order_number TEXT UNIQUE NOT NULL,
+  tracking_token TEXT UNIQUE,
   customer_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   customer_name TEXT NOT NULL,
   customer_phone TEXT NOT NULL,
@@ -375,19 +402,58 @@ CREATE POLICY "Public can read admin settings" ON public.admin_settings FOR SELE
 CREATE POLICY "Users view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Users update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
+-- Super Admin paykajastip@gmail.com has global read/write
+CREATE POLICY "Admin manage profiles" ON public.profiles FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND LOWER(p.email) = 'paykajastip@gmail.com' AND p.role = 'admin')
+);
+
 -- Customers can view and create their own orders
 CREATE POLICY "Customers view own orders" ON public.orders FOR SELECT USING (customer_id = auth.uid());
 CREATE POLICY "Customers create orders" ON public.orders FOR INSERT WITH CHECK (customer_id = auth.uid());
 
--- Merchants manage their stores and products
-CREATE POLICY "Merchants manage their stores" ON public.stores FOR ALL USING (merchant_id = auth.uid());
-CREATE POLICY "Merchants manage their products" ON public.products FOR ALL USING (
-  EXISTS (SELECT 1 FROM public.stores WHERE stores.id = products.store_id AND stores.merchant_id = auth.uid())
+-- Guest customers can create and view orders via secure tracking token without login
+CREATE POLICY "Guests create orders" ON public.orders FOR INSERT WITH CHECK (tracking_token IS NOT NULL);
+CREATE POLICY "Guests view orders by tracking token" ON public.orders FOR SELECT USING (tracking_token IS NOT NULL);
+
+-- Order Items
+CREATE POLICY "Order items insert" ON public.order_items FOR INSERT WITH CHECK (true);
+CREATE POLICY "Order items select" ON public.order_items FOR SELECT USING (true);
+
+-- Approved Merchants manage their stores and products
+CREATE POLICY "Approved merchants manage their stores" ON public.stores FOR ALL USING (
+  merchant_id = auth.uid() AND EXISTS (
+    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'merchant' AND approval_status = 'approved'
+  )
+);
+CREATE POLICY "Approved merchants manage their products" ON public.products FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.stores
+    JOIN public.profiles ON profiles.id = stores.merchant_id
+    WHERE stores.id = products.store_id
+      AND stores.merchant_id = auth.uid()
+      AND profiles.approval_status = 'approved'
+  )
 );
 
--- Drivers can view orders assigned to them or unassigned waiting orders
-CREATE POLICY "Drivers view assigned or open orders" ON public.orders FOR SELECT USING (
-  status IN ('MENUNGGU DRIVER', 'DRIVER MENUJU LOKASI', 'BARANG DIAMBIL', 'DRIVER MENUJU CUSTOMER')
+-- Approved Drivers can view and update assigned or open orders
+CREATE POLICY "Approved drivers view assigned or open orders" ON public.orders FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'driver' AND approval_status = 'approved'
+  ) AND status IN ('MENUNGGU DRIVER', 'DRIVER MENUJU LOKASI', 'BARANG DIAMBIL', 'DRIVER MENUJU CUSTOMER')
+);
+
+-- Admin manage all orders, stores, products, payments
+CREATE POLICY "Admin manage orders" ON public.orders FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND LOWER(email) = 'paykajastip@gmail.com' AND role = 'admin')
+);
+CREATE POLICY "Admin manage stores" ON public.stores FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND LOWER(email) = 'paykajastip@gmail.com' AND role = 'admin')
+);
+CREATE POLICY "Admin manage products" ON public.products FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND LOWER(email) = 'paykajastip@gmail.com' AND role = 'admin')
+);
+CREATE POLICY "Admin manage payments" ON public.payments FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND LOWER(email) = 'paykajastip@gmail.com' AND role = 'admin')
 );
 
 -- STORAGE BUCKETS

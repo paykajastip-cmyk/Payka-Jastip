@@ -958,14 +958,14 @@ export const INITIAL_DRIVERS: Driver[] = [
 
 // 10 Customer Profiles
 export const INITIAL_CUSTOMERS: Profile[] = [
-  { id: 'cust-1', email: 'andi.singkawang@gmail.com', full_name: 'Andi Kusuma', phone: '081234567801', role: 'customer', created_at: '2026-01-10' },
-  { id: 'cust-2', email: 'siti.nurhaliza@gmail.com', full_name: 'Siti Nurhaliza', phone: '081234567802', role: 'customer', created_at: '2026-01-11' },
-  { id: 'cust-3', email: 'michael.tan@gmail.com', full_name: 'Michael Tan', phone: '081234567803', role: 'customer', created_at: '2026-01-12' },
-  { id: 'cust-4', email: 'dewi.lestari@gmail.com', full_name: 'Dewi Lestari', phone: '081234567804', role: 'customer', created_at: '2026-01-13' },
-  { id: 'cust-5', email: 'eko.prasetyo@gmail.com', full_name: 'Eko Prasetyo', phone: '081234567805', role: 'customer', created_at: '2026-01-14' },
-  { id: 'cust-6', email: 'linda.wijaya@gmail.com', full_name: 'Linda Wijaya', phone: '081234567806', role: 'customer', created_at: '2026-01-15' },
-  { id: 'cust-7', email: 'rudi.hartono@gmail.com', full_name: 'Rudi Hartono', phone: '081234567807', role: 'customer', created_at: '2026-01-16' },
-  { id: 'cust-8', email: 'novita.sari@gmail.com', full_name: 'Novita Sari', phone: '081234567808', role: 'customer', created_at: '2026-01-17' },
-  { id: 'cust-9', email: 'agus.salim@gmail.com', full_name: 'Agus Salim', phone: '081234567809', role: 'customer', created_at: '2026-01-18' },
-  { id: 'cust-10', email: 'fitriani@gmail.com', full_name: 'Fitriani Bengkayang', phone: '081234567810', role: 'customer', created_at: '2026-01-19' },
+  { id: 'cust-1', email: 'andi.singkawang@gmail.com', full_name: 'Andi Kusuma', phone: '081234567801', role: 'customer', approval_status: 'approved', created_at: '2026-01-10' },
+  { id: 'cust-2', email: 'siti.nurhaliza@gmail.com', full_name: 'Siti Nurhaliza', phone: '081234567802', role: 'customer', approval_status: 'approved', created_at: '2026-01-11' },
+  { id: 'cust-3', email: 'michael.tan@gmail.com', full_name: 'Michael Tan', phone: '081234567803', role: 'customer', approval_status: 'approved', created_at: '2026-01-12' },
+  { id: 'cust-4', email: 'dewi.lestari@gmail.com', full_name: 'Dewi Lestari', phone: '081234567804', role: 'customer', approval_status: 'approved', created_at: '2026-01-13' },
+  { id: 'cust-5', email: 'eko.prasetyo@gmail.com', full_name: 'Eko Prasetyo', phone: '081234567805', role: 'customer', approval_status: 'approved', created_at: '2026-01-14' },
+  { id: 'cust-6', email: 'linda.wijaya@gmail.com', full_name: 'Linda Wijaya', phone: '081234567806', role: 'customer', approval_status: 'approved', created_at: '2026-01-15' },
+  { id: 'cust-7', email: 'rudi.hartono@gmail.com', full_name: 'Rudi Hartono', phone: '081234567807', role: 'customer', approval_status: 'approved', created_at: '2026-01-16' },
+  { id: 'cust-8', email: 'novita.sari@gmail.com', full_name: 'Novita Sari', phone: '081234567808', role: 'customer', approval_status: 'approved', created_at: '2026-01-17' },
+  { id: 'cust-9', email: 'agus.salim@gmail.com', full_name: 'Agus Salim', phone: '081234567809', role: 'customer', approval_status: 'approved', created_at: '2026-01-18' },
+  { id: 'cust-10', email: 'fitriani@gmail.com', full_name: 'Fitriani Bengkayang', phone: '081234567810', role: 'customer', approval_status: 'approved', created_at: '2026-01-19' },
 ];

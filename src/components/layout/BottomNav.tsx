@@ -12,6 +12,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, setActiveTab })
 
   const userActiveOrders = orders.filter(
     (o) =>
+      currentUser &&
       o.customer_id === currentUser.id &&
       o.status !== 'SELESAI' &&
       o.status !== 'DIBATALKAN'

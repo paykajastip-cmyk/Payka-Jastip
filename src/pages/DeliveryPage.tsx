@@ -35,8 +35,8 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({ setActiveTab }) => {
     size_l_rate: 25000,
   };
 
-  const [senderName, setSenderName] = useState(currentUser.full_name);
-  const [senderPhone, setSenderPhone] = useState(currentUser.phone);
+  const [senderName, setSenderName] = useState(currentUser?.full_name || '');
+  const [senderPhone, setSenderPhone] = useState(currentUser?.phone || '');
   const [recipientName, setRecipientName] = useState('');
   const [recipientPhone, setRecipientPhone] = useState('');
   const [pickupAddress, setPickupAddress] = useState(userLocation.address);
@@ -78,7 +78,7 @@ export const DeliveryPage: React.FC<DeliveryPageProps> = ({ setActiveTab }) => {
       const selectedSchedule = schedules.find((s) => s.id === selectedScheduleId);
 
       const res = await createDeliveryRequest({
-        customer_id: currentUser.id,
+        customer_id: currentUser?.id || 'guest',
         sender_name: senderName,
         sender_phone: senderPhone,
         recipient_name: recipientName,

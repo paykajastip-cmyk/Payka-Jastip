@@ -1,4 +1,5 @@
 export type UserRole = 'customer' | 'merchant' | 'driver' | 'admin';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
 export interface Profile {
   id: string;
@@ -6,8 +7,45 @@ export interface Profile {
   full_name: string;
   phone: string;
   role: UserRole;
+  approval_status: ApprovalStatus;
   avatar_url?: string;
   created_at: string;
+  rejection_reason?: string;
+  // Merchant details
+  store_name?: string;
+  store_address?: string;
+  district?: string;
+  city?: string;
+  store_description?: string;
+  opening_hours?: string;
+  // Driver details
+  vehicle_type?: 'Motor' | 'Mobil' | 'Pickup';
+  vehicle_plate?: string;
+}
+
+export interface MerchantRegisterInput {
+  owner_name: string;
+  store_name: string;
+  phone: string;
+  email: string;
+  password?: string;
+  store_address: string;
+  district: string;
+  city: string;
+  description: string;
+  opening_hours: string;
+}
+
+export interface DriverRegisterInput {
+  full_name: string;
+  phone: string;
+  email: string;
+  password?: string;
+  address: string;
+  district: string;
+  city: string;
+  vehicle_type: 'Motor' | 'Mobil' | 'Pickup';
+  vehicle_plate: string;
 }
 
 export type StoreType = 'offline' | 'online' | 'umkm' | 'home_business';
@@ -107,6 +145,8 @@ export interface OrderItem {
 export interface Order {
   id: string;
   order_number: string;
+  tracking_token?: string;
+  is_guest?: boolean;
   customer_id: string;
   customer_name: string;
   customer_phone: string;

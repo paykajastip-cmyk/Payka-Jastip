@@ -60,8 +60,8 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
     e.preventDefault();
     addReview({
       order_id: order.id,
-      customer_id: currentUser.id,
-      customer_name: currentUser.full_name,
+      customer_id: currentUser?.id || order.customer_id,
+      customer_name: currentUser?.full_name || order.customer_name,
       store_id: order.store_id,
       driver_id: order.driver_id,
       store_rating: storeRating,

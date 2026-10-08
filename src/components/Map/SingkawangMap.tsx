@@ -15,6 +15,7 @@ import {
   AlertCircle,
   X,
   CheckCircle2,
+  ShoppingBag,
 } from 'lucide-react';
 import { Store, OsmPlace } from '../../types';
 import { useApp } from '../../context/AppContext';
@@ -32,6 +33,7 @@ interface SingkawangMapProps {
   onCoordinateChange?: (lat: number, lng: number) => void;
   initialLat?: number;
   initialLng?: number;
+  onNavigateToJastip?: () => void;
 }
 
 // Preset verified places from OpenStreetMap in Singkawang for instant offline/online map exploration
@@ -127,8 +129,18 @@ export const SingkawangMap: React.FC<SingkawangMapProps> = ({
   onCoordinateChange,
   initialLat = 0.9056,
   initialLng = 108.9868,
+  onNavigateToJastip,
 }) => {
-  const { stores, userLocation, setUserLocation, categories, addStore, adminSettings } = useApp();
+  const {
+    stores,
+    userLocation,
+    setUserLocation,
+    categories,
+    addStore,
+    adminSettings,
+    products,
+    setJastipTargetStore,
+  } = useApp();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
@@ -555,8 +567,20 @@ export const SingkawangMap: React.FC<SingkawangMapProps> = ({
           </div>
 
           {combinedPlaces.length === 0 && osmSearchResults.length === 0 && (
-            <div className="p-4 text-center text-xs text-slate-500">
-              Tidak ditemukan tempat &quot;{searchQuery}&quot; di Singkawang.
+            <div className="p-4 text-center text-xs text-slate-600">
+              <p>Tidak ditemukan tempat &quot;{searchQuery}&quot; di Singkawang.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setJastipTargetStore({ storeName: searchQuery, address: 'Singkawang' });
+                  onNavigateToJastip?.();
+                  setShowResultsList(false);
+                }}
+                className="mt-2.5 px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs inline-flex items-center gap-1.5 shadow-xs transition"
+              >
+                <ShoppingBag className="w-3.5 h-3.5" />
+                <span>Jastip Sekarang untuk &quot;{searchQuery}&quot;!</span>
+              </button>
             </div>
           )}
 
@@ -724,18 +748,37 @@ export const SingkawangMap: React.FC<SingkawangMapProps> = ({
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2 pt-1">
-                {onSelectStore && (
-                  <button
-                    onClick={() => {
-                      onSelectStore(selectedStore);
-                      setShowNavSheet(false);
-                    }}
-                    className="flex-1 py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-sky-600/20 active:scale-98 transition"
-                  >
-                    <span>Lihat Produk & Pesan</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                )}
+                {(() => {
+                  const storeProdCount = products.filter((p) => p.store_id === selectedStore.id).length;
+                  if (storeProdCount === 0) {
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setJastipTargetStore({ storeName: selectedStore.name, address: selectedStore.address });
+                          onNavigateToJastip?.();
+                          setShowNavSheet(false);
+                        }}
+                        className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-98 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md transition"
+                      >
+                        <ShoppingBag className="w-4 h-4" />
+                        <span>Jastip Sekarang! (Toko Belum Ada Menu)</span>
+                      </button>
+                    );
+                  }
+                  return onSelectStore ? (
+                    <button
+                      onClick={() => {
+                        onSelectStore(selectedStore);
+                        setShowNavSheet(false);
+                      }}
+                      className="flex-1 py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-sky-600/20 active:scale-98 transition"
+                    >
+                      <span>Lihat Produk & Pesan</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  ) : null;
+                })()}
 
                 {/* WhatsApp Store */}
                 <a
@@ -819,11 +862,27 @@ export const SingkawangMap: React.FC<SingkawangMapProps> = ({
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
                 <button
+                  type="button"
+                  onClick={() => {
+                    setJastipTargetStore({
+                      storeName: selectedOsmPlace.name,
+                      address: selectedOsmPlace.address,
+                    });
+                    onNavigateToJastip?.();
+                    setShowNavSheet(false);
+                  }}
+                  className="w-full sm:flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-98 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow-md transition"
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                  <span>Jastip Sekarang dari Sini!</span>
+                </button>
+
+                <button
                   onClick={() => handleOpenRegisterDialog(selectedOsmPlace)}
-                  className="w-full sm:flex-1 py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-sky-600/20 active:scale-98 transition"
+                  className="w-full sm:w-auto py-2.5 px-3 rounded-xl bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-98 transition"
                 >
                   <PlusCircle className="w-4 h-4" />
-                  <span>DAFTARKAN TOKO KE PAYKAJASTIP</span>
+                  <span>Daftarkan Mitra</span>
                 </button>
 
                 <div className="flex items-center gap-2 w-full sm:w-auto">

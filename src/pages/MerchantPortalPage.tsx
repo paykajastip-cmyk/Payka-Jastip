@@ -34,7 +34,7 @@ export const MerchantPortalPage: React.FC = () => {
 
   // Find store belonging to current merchant or fallback to first store
   const merchantStore =
-    stores.find((s) => s.merchant_id === currentUser.id) || stores[0];
+    stores.find((s) => currentUser && s.merchant_id === currentUser.id) || stores[0];
 
   const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'profile'>('orders');
 

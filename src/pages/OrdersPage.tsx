@@ -27,13 +27,38 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
   onOpenPayment,
   setActiveTab,
 }) => {
-  const { orders, currentUser, adminSettings, addReview } = useApp();
+  const { orders, currentUser, guestOrderTokens, getOrderByTracking } = useApp();
   const [filterTab, setFilterTab] = useState<string>('all');
+  const [searchTracking, setSearchTracking] = useState('');
+  const [trackingNotFound, setTrackingNotFound] = useState(false);
+
+  const handleTrackSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchTracking.trim()) return;
+    const found = getOrderByTracking({
+      orderNumber: searchTracking.trim(),
+      trackingToken: searchTracking.trim(),
+    });
+    if (found) {
+      setTrackingNotFound(false);
+      onSelectOrder(found);
+    } else {
+      setTrackingNotFound(true);
+    }
+  };
 
   // Customer's orders
   const userOrders = orders.filter((o) => {
-    if (currentUser.role === 'admin') return true;
-    return o.customer_id === currentUser.id;
+    if (currentUser) {
+      if (currentUser.role === 'admin') return true;
+      return o.customer_id === currentUser.id;
+    }
+    // Guest: only see orders matching stored guest order tokens or tracked in guestOrderTokens
+    return (
+      (o.tracking_token && guestOrderTokens?.includes(o.tracking_token)) ||
+      (o.id && guestOrderTokens?.includes(o.id)) ||
+      (o.order_number && guestOrderTokens?.includes(o.order_number))
+    );
   });
 
   const filteredOrders = userOrders.filter((o) => {

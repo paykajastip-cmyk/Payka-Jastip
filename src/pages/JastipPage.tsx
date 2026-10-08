@@ -32,8 +32,8 @@ export const JastipPage: React.FC<JastipPageProps> = ({ setActiveTab }) => {
     setJastipTargetStore,
   } = useApp();
 
-  const [name, setName] = useState(currentUser.full_name);
-  const [phone, setPhone] = useState(currentUser.phone);
+  const [name, setName] = useState(currentUser?.full_name || '');
+  const [phone, setPhone] = useState(currentUser?.phone || '');
   const [itemName, setItemName] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [targetStore, setTargetStore] = useState(jastipTargetStore?.storeName || '');
@@ -77,7 +77,7 @@ export const JastipPage: React.FC<JastipPageProps> = ({ setActiveTab }) => {
     setIsSubmitting(true);
     try {
       const res = await createJastipRequest({
-        customer_id: currentUser.id,
+        customer_id: currentUser?.id || 'guest',
         customer_name: name,
         customer_phone: phone,
         item_name: itemName,

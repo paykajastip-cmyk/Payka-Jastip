@@ -44,8 +44,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   } = useApp();
 
   // Form State
-  const [customerName, setCustomerName] = useState(currentUser.full_name);
-  const [customerPhone, setCustomerPhone] = useState(currentUser.phone);
+  const [customerName, setCustomerName] = useState(currentUser?.full_name || '');
+  const [customerPhone, setCustomerPhone] = useState(currentUser?.phone || '');
   const [deliveryAddress, setDeliveryAddress] = useState(userLocation.address);
   const [orderType, setOrderType] = useState<'delivery' | 'pickup'>('delivery');
   const [orderNotes, setOrderNotes] = useState('');

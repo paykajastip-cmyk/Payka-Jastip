@@ -20,6 +20,8 @@ import {
   AdminSettings,
   ServiceArea,
   UserRole,
+  MerchantRegisterInput,
+  DriverRegisterInput,
 } from '../types';
 import {
   INITIAL_STORES,
@@ -34,11 +36,24 @@ import {
   INITIAL_PROMOS,
 } from '../data/initialData';
 import { calculateDeliveryFee } from '../utils/helpers';
+import { supabase } from '../services/supabase';
 
 interface AppContextType {
   // Current user & authentication
-  currentUser: Profile;
+  currentUser: Profile | null;
+  isGuest: boolean;
   allUsers: Profile[];
+  login: (email: string, password?: string) => Promise<{ success: boolean; message?: string; user?: Profile }>;
+  registerCustomer: (input: { full_name: string; phone: string; email: string; password?: string }) => Promise<{ success: boolean; message?: string; user?: Profile }>;
+  registerMerchant: (input: MerchantRegisterInput) => Promise<{ success: boolean; message?: string; user?: Profile }>;
+  registerDriver: (input: DriverRegisterInput) => Promise<{ success: boolean; message?: string; user?: Profile }>;
+  logout: () => void;
+  updateApprovalStatus: (userId: string, status: 'approved' | 'rejected', reason?: string) => void;
+  canAccessMerchant: boolean;
+  canAccessDriver: boolean;
+  canAccessAdmin: boolean;
+  guestOrderTokens: string[];
+  getOrderByTracking: (query: { orderNumber?: string; trackingToken?: string; phone?: string }) => Order | undefined;
   switchUser: (user: Profile) => void;
   setUserRole: (role: UserRole) => void;
 
@@ -145,44 +160,97 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Profiles
   const adminUser: Profile = {
     id: 'admin-1',
-    email: 'admin@paykajastip.com',
-    full_name: 'Super Admin Payka',
+    email: 'paykajastip@gmail.com',
+    full_name: 'Admin PaykaJastip',
     phone: '081254321098',
     role: 'admin',
+    approval_status: 'approved',
     avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
     created_at: '2026-01-01',
   };
 
-  const merchantUser: Profile = {
+  const merchantApprovedUser: Profile = {
     id: 'merchant-user-1',
     email: 'haji.aman@paykajastip.com',
-    full_name: 'Haji Aman (Merchant Bakmi)',
+    full_name: 'Haji Aman',
     phone: '081345678901',
     role: 'merchant',
+    approval_status: 'approved',
+    store_name: 'Bakmi Kering Haji Aman Singkawang',
+    store_address: 'Jl. Merdeka No. 12, Singkawang Barat',
+    district: 'Singkawang Barat',
+    city: 'Singkawang',
+    opening_hours: '07.00 - 21.00 WIB',
+    store_description: 'Bakmi kering sapi khas Singkawang legendaris sejak 1998.',
     avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
     created_at: '2026-01-10',
   };
 
-  const driverUser: Profile = {
+  const merchantPendingUser: Profile = {
+    id: 'merchant-pending-1',
+    email: 'warung.khatulistiwa@gmail.com',
+    full_name: 'Dewi Sartika',
+    phone: '081299887766',
+    role: 'merchant',
+    approval_status: 'pending',
+    store_name: 'Warung Bu Dewi Khatulistiwa',
+    store_address: 'Jl. Pemuda No. 18, Singkawang Barat',
+    district: 'Singkawang Barat',
+    city: 'Singkawang',
+    opening_hours: '08.00 - 20.00 WIB',
+    store_description: 'Aneka masakan rumahan dan kue basah khas Melayu Singkawang.',
+    created_at: new Date(Date.now() - 2 * 3600000).toISOString(),
+  };
+
+  const driverApprovedUser: Profile = {
     id: 'driver-user-1',
     email: 'budi.driver@paykajastip.com',
-    full_name: 'Budi Santoso (Driver Payka 01)',
+    full_name: 'Budi Santoso',
     phone: '081255443322',
     role: 'driver',
+    approval_status: 'approved',
+    vehicle_type: 'Motor',
+    vehicle_plate: 'KB 3412 SK',
+    district: 'Singkawang Barat',
+    city: 'Singkawang',
     avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80',
     created_at: '2026-01-05',
   };
 
-  const allUsers: Profile[] = [
+  const driverPendingUser: Profile = {
+    id: 'driver-pending-1',
+    email: 'hendra.motor@gmail.com',
+    full_name: 'Hendra Gunawan',
+    phone: '081377889900',
+    role: 'driver',
+    approval_status: 'pending',
+    vehicle_type: 'Motor',
+    vehicle_plate: 'KB 5678 SK',
+    district: 'Singkawang Tengah',
+    city: 'Singkawang',
+    created_at: new Date(Date.now() - 1 * 3600000).toISOString(),
+  };
+
+  const initialAllUsers: Profile[] = [
     adminUser,
-    merchantUser,
-    driverUser,
+    merchantApprovedUser,
+    merchantPendingUser,
+    driverApprovedUser,
+    driverPendingUser,
     ...INITIAL_CUSTOMERS,
   ];
 
   // States
-  const [currentUser, setCurrentUser] = useState<Profile>(() =>
-    loadStorage('user', INITIAL_CUSTOMERS[0])
+  const [allUsers, setAllUsers] = useState<Profile[]>(() =>
+    loadStorage('all_users', initialAllUsers)
+  );
+
+  const [currentUser, setCurrentUser] = useState<Profile | null>(() =>
+    loadStorage('user', null)
+  );
+
+  const [guestOrderTokens, setGuestOrderTokens] = useState<string[]>(() =>
+    loadStorage('guest_tokens', [])
   );
 
   const [stores, setStores] = useState<Store[]>(() =>
@@ -395,7 +463,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [jastipTargetStore, setJastipTargetStore] = useState<{ storeName: string; address?: string } | null>(null);
 
   // Sync to localStorage
+  useEffect(() => saveStorage('all_users', allUsers), [allUsers]);
   useEffect(() => saveStorage('user', currentUser), [currentUser]);
+  useEffect(() => saveStorage('guest_tokens', guestOrderTokens), [guestOrderTokens]);
   useEffect(() => saveStorage('stores', stores), [stores]);
   useEffect(() => saveStorage('products', products), [products]);
   useEffect(() => saveStorage('drivers', drivers), [drivers]);
@@ -431,16 +501,272 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Switch role or switch user profile
+  const isGuest = !currentUser;
+
+  const canAccessMerchant = Boolean(
+    currentUser &&
+      ((currentUser.role === 'merchant' && currentUser.approval_status === 'approved') ||
+        (currentUser.role === 'admin' && currentUser.email.toLowerCase() === 'paykajastip@gmail.com'))
+  );
+
+  const canAccessDriver = Boolean(
+    currentUser &&
+      ((currentUser.role === 'driver' && currentUser.approval_status === 'approved') ||
+        (currentUser.role === 'admin' && currentUser.email.toLowerCase() === 'paykajastip@gmail.com'))
+  );
+
+  const canAccessAdmin = Boolean(
+    currentUser &&
+      currentUser.role === 'admin' &&
+      currentUser.email.toLowerCase() === 'paykajastip@gmail.com'
+  );
+
+  // Authentication & Access Control
+  const login = async (email: string, _password?: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check if admin login
+    if (cleanEmail === 'paykajastip@gmail.com') {
+      let admin = allUsers.find((u) => u.email.toLowerCase() === 'paykajastip@gmail.com');
+      if (!admin) {
+        admin = {
+          id: 'admin-1',
+          email: 'paykajastip@gmail.com',
+          full_name: 'Admin PaykaJastip',
+          phone: '081254321098',
+          role: 'admin',
+          approval_status: 'approved',
+          created_at: new Date().toISOString(),
+        };
+        setAllUsers((prev) => [admin!, ...prev]);
+      } else {
+        admin = { ...admin, role: 'admin', approval_status: 'approved' };
+      }
+      setCurrentUser(admin);
+      return { success: true, user: admin };
+    }
+
+    const user = allUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (!user) {
+      return { success: false, message: 'Email tidak ditemukan. Silakan mendaftar terlebih dahulu.' };
+    }
+
+    // Role admin validation safeguard
+    if (user.role === 'admin' && cleanEmail !== 'paykajastip@gmail.com') {
+      const sanitized: Profile = { ...user, role: 'customer' };
+      setCurrentUser(sanitized);
+      return { success: true, user: sanitized };
+    }
+
+    setCurrentUser(user);
+    return { success: true, user };
+  };
+
+  const registerCustomer = async (input: {
+    full_name: string;
+    phone: string;
+    email: string;
+    password?: string;
+  }) => {
+    const cleanEmail = input.email.trim().toLowerCase();
+    if (allUsers.some((u) => u.email.toLowerCase() === cleanEmail)) {
+      return { success: false, message: 'Email sudah terdaftar. Silakan masuk dengan akun Anda.' };
+    }
+
+    const newProfile: Profile = {
+      id: `cust-${Date.now()}`,
+      email: cleanEmail,
+      full_name: input.full_name,
+      phone: input.phone,
+      role: 'customer',
+      approval_status: 'approved',
+      created_at: new Date().toISOString(),
+    };
+
+    setAllUsers((prev) => [newProfile, ...prev]);
+    setCurrentUser(newProfile);
+    return { success: true, user: newProfile };
+  };
+
+  const registerMerchant = async (input: MerchantRegisterInput) => {
+    const cleanEmail = input.email.trim().toLowerCase();
+    if (allUsers.some((u) => u.email.toLowerCase() === cleanEmail)) {
+      return { success: false, message: 'Email sudah terdaftar.' };
+    }
+
+    const newMerchantId = `merch-${Date.now()}`;
+    const newProfile: Profile = {
+      id: newMerchantId,
+      email: cleanEmail,
+      full_name: input.owner_name,
+      phone: input.phone,
+      role: 'merchant',
+      approval_status: 'pending',
+      store_name: input.store_name,
+      store_address: input.store_address,
+      district: input.district,
+      city: input.city,
+      store_description: input.description,
+      opening_hours: input.opening_hours,
+      created_at: new Date().toISOString(),
+    };
+
+    const newStore: Store = {
+      id: `store-${Date.now()}`,
+      merchant_id: newMerchantId,
+      name: input.store_name,
+      slug: input.store_name.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      logo_url: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=300&q=80',
+      banner_url: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80',
+      category: 'UMKM',
+      description: input.description || 'Merchant Mitra PaykaJastip Singkawang',
+      address: input.store_address,
+      latitude: 0.9056,
+      longitude: 108.9868,
+      district: input.district,
+      whatsapp: input.phone,
+      opening_hours: input.opening_hours || '08.00 - 21.00 WIB',
+      is_open: true,
+      rating: 5.0,
+      review_count: 0,
+      store_type: 'umkm',
+      location_status: 'pending',
+      is_active: false,
+      created_at: new Date().toISOString(),
+    };
+
+    setStores((prev) => [newStore, ...prev]);
+    setAllUsers((prev) => [newProfile, ...prev]);
+    setCurrentUser(newProfile);
+    return { success: true, user: newProfile };
+  };
+
+  const registerDriver = async (input: DriverRegisterInput) => {
+    const cleanEmail = input.email.trim().toLowerCase();
+    if (allUsers.some((u) => u.email.toLowerCase() === cleanEmail)) {
+      return { success: false, message: 'Email sudah terdaftar.' };
+    }
+
+    const newDriverId = `driver-${Date.now()}`;
+    const newProfile: Profile = {
+      id: newDriverId,
+      email: cleanEmail,
+      full_name: input.full_name,
+      phone: input.phone,
+      role: 'driver',
+      approval_status: 'pending',
+      vehicle_type: input.vehicle_type,
+      vehicle_plate: input.vehicle_plate,
+      district: input.district,
+      city: input.city,
+      created_at: new Date().toISOString(),
+    };
+
+    const newDriverRecord: Driver = {
+      id: `drv-${Date.now()}`,
+      user_id: newDriverId,
+      name: input.full_name,
+      phone: input.phone,
+      vehicle_type: input.vehicle_type,
+      vehicle_plate: input.vehicle_plate,
+      is_online: false,
+      current_lat: 0.9056,
+      current_lng: 108.9868,
+      rating: 5.0,
+      total_deliveries: 0,
+      is_active: false,
+      created_at: new Date().toISOString(),
+    };
+
+    setDrivers((prev) => [newDriverRecord, ...prev]);
+    setAllUsers((prev) => [newProfile, ...prev]);
+    setCurrentUser(newProfile);
+    return { success: true, user: newProfile };
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    try {
+      localStorage.removeItem(STORAGE_PREFIX + 'user');
+    } catch {}
+  };
+
+  const updateApprovalStatus = (
+    userId: string,
+    status: 'approved' | 'rejected',
+    reason?: string
+  ) => {
+    setAllUsers((prev) =>
+      prev.map((u) => {
+        if (u.id === userId) {
+          return { ...u, approval_status: status, rejection_reason: reason };
+        }
+        return u;
+      })
+    );
+
+    if (status === 'approved') {
+      setStores((prev) =>
+        prev.map((s) => (s.merchant_id === userId ? { ...s, is_active: true } : s))
+      );
+      setDrivers((prev) =>
+        prev.map((d) => (d.user_id === userId ? { ...d, is_active: true } : d))
+      );
+    } else if (status === 'rejected') {
+      setStores((prev) =>
+        prev.map((s) => (s.merchant_id === userId ? { ...s, is_active: false } : s))
+      );
+      setDrivers((prev) =>
+        prev.map((d) => (d.user_id === userId ? { ...d, is_active: false } : d))
+      );
+    }
+
+    setCurrentUser((prev) => {
+      if (prev && prev.id === userId) {
+        return { ...prev, approval_status: status, rejection_reason: reason };
+      }
+      return prev;
+    });
+  };
+
+  const getOrderByTracking = (query: {
+    orderNumber?: string;
+    trackingToken?: string;
+    phone?: string;
+  }) => {
+    return orders.find((o) => {
+      if (query.trackingToken && o.tracking_token === query.trackingToken) return true;
+      if (query.orderNumber && o.order_number.toLowerCase() === query.orderNumber.toLowerCase().trim()) {
+        if (!query.phone) return true;
+        const cleanQueryPhone = query.phone.replace(/\D/g, '');
+        const cleanOrderPhone = o.customer_phone.replace(/\D/g, '');
+        return cleanOrderPhone.endsWith(cleanQueryPhone) || cleanQueryPhone.endsWith(cleanOrderPhone);
+      }
+      return false;
+    });
+  };
+
+  // Backward compatibility switchUser
   const switchUser = (user: Profile) => {
+    if (user.role === 'admin' && user.email.toLowerCase() !== 'paykajastip@gmail.com') {
+      return;
+    }
     setCurrentUser(user);
   };
 
   const setUserRole = (role: UserRole) => {
-    if (role === 'admin') setCurrentUser(adminUser);
-    else if (role === 'merchant') setCurrentUser(merchantUser);
-    else if (role === 'driver') setCurrentUser(driverUser);
-    else setCurrentUser(INITIAL_CUSTOMERS[0]);
+    if (role === 'admin') {
+      const admin = allUsers.find((u) => u.email.toLowerCase() === 'paykajastip@gmail.com') || adminUser;
+      setCurrentUser(admin);
+    } else if (role === 'merchant') {
+      const merch = allUsers.find((u) => u.role === 'merchant') || merchantApprovedUser;
+      setCurrentUser(merch);
+    } else if (role === 'driver') {
+      const drv = allUsers.find((u) => u.role === 'driver') || driverApprovedUser;
+      setCurrentUser(drv);
+    } else {
+      setCurrentUser(INITIAL_CUSTOMERS[0]);
+    }
   };
 
   // Cart operations
@@ -496,12 +822,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createOrder = async (orderData: Partial<Order>): Promise<Order> => {
     const timestamp = Date.now().toString().slice(-4);
     const orderNum = `PK-ORD-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${timestamp}`;
+    const isGuestOrder = !currentUser;
+    const trackingToken = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `trk-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
     const newOrder: Order = {
       id: `ord-${Date.now()}`,
       order_number: orderNum,
-      customer_id: currentUser.id,
-      customer_name: orderData.customer_name || currentUser.full_name,
-      customer_phone: orderData.customer_phone || currentUser.phone,
+      tracking_token: trackingToken,
+      is_guest: isGuestOrder,
+      customer_id: currentUser ? currentUser.id : 'guest',
+      customer_name: orderData.customer_name || currentUser?.full_name || 'Pelanggan Guest',
+      customer_phone: orderData.customer_phone || currentUser?.phone || '',
       store_id: orderData.store_id || '',
       store_name: orderData.store_name || '',
       store_phone: orderData.store_phone || '',
@@ -524,6 +857,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updated_at: new Date().toISOString(),
     };
 
+    if (isGuestOrder) {
+      setGuestOrderTokens((prev) => [trackingToken, ...prev]);
+    }
+
     setOrders((prev) => [newOrder, ...prev]);
 
     // Create payment entry
@@ -539,20 +876,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setPayments((prev) => [newPayment, ...prev]);
 
-    // Add notification
-    setNotifications((prev) => [
-      {
-        id: `notif-${Date.now()}`,
-        user_id: currentUser.id,
-        title: 'Pesanan Berhasil Dibuat',
-        message: `Pesanan #${newOrder.order_number} berhasil dibuat. Silakan lakukan pembayaran manual.`,
-        type: 'order',
-        order_id: newOrder.id,
-        is_read: false,
-        created_at: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+    // Add notification if customer logged in
+    if (currentUser) {
+      setNotifications((prev) => [
+        {
+          id: `notif-${Date.now()}`,
+          user_id: currentUser.id,
+          title: 'Pesanan Berhasil Dibuat',
+          message: `Pesanan #${newOrder.order_number} berhasil dibuat. Silakan lakukan pembayaran manual.`,
+          type: 'order',
+          order_id: newOrder.id,
+          is_read: false,
+          created_at: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
+    }
 
     return newOrder;
   };
@@ -578,7 +917,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
-    if (updated) {
+    if (updated && currentUser) {
       setNotifications((prev) => [
         {
           id: `notif-${Date.now()}`,
@@ -633,20 +972,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    // Notification for admin and customer
-    setNotifications((prev) => [
-      {
-        id: `notif-${Date.now()}`,
-        user_id: currentUser.id,
-        title: 'Bukti Pembayaran Diterima',
-        message: `Bukti transfer Anda telah dikirim dan sedang diverifikasi oleh Admin.`,
-        type: 'payment',
-        order_id: orderId,
-        is_read: false,
-        created_at: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+    // Notification for admin and customer if logged in
+    if (currentUser) {
+      setNotifications((prev) => [
+        {
+          id: `notif-${Date.now()}`,
+          user_id: currentUser.id,
+          title: 'Bukti Pembayaran Diterima',
+          message: `Bukti transfer Anda telah dikirim dan sedang diverifikasi oleh Admin.`,
+          type: 'payment',
+          order_id: orderId,
+          is_read: false,
+          created_at: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
+    }
   };
 
   // Payment verification exclusively by Admin
@@ -667,7 +1008,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ...p,
             payment_status: newPaymentStatus,
             verified_at: new Date().toISOString(),
-            verified_by: currentUser.full_name,
+            verified_by: currentUser ? currentUser.full_name : 'Admin Payka',
             rejection_reason: rejectionReason,
             updated_at: new Date().toISOString(),
           };
@@ -962,13 +1303,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Current driver matching currentUser if driver role
-  const currentDriver = drivers.find((d) => d.user_id === currentUser.id) || drivers[0];
+  const currentDriver = currentUser
+    ? drivers.find((d) => d.user_id === currentUser.id) ||
+      drivers.find((d) => d.phone === currentUser.phone)
+    : undefined;
 
   return (
     <AppContext.Provider
       value={{
         currentUser,
+        isGuest,
         allUsers,
+        login,
+        registerCustomer,
+        registerMerchant,
+        registerDriver,
+        logout,
+        updateApprovalStatus,
+        canAccessMerchant,
+        canAccessDriver,
+        canAccessAdmin,
+        guestOrderTokens,
+        getOrderByTracking,
         switchUser,
         setUserRole,
         stores,

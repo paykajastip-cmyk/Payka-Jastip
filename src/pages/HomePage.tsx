@@ -302,60 +302,75 @@ export const HomePage: React.FC<HomePageProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {promoProducts.map((prod) => (
-            <div
-              key={prod.id}
-              className="flex flex-col justify-between p-3 rounded-2xl bg-white border border-slate-200 hover:border-sky-300 shadow-2xs hover:shadow-md transition"
+        {promoProducts.length === 0 ? (
+          <div className="p-6 rounded-3xl bg-linear-to-br from-amber-50 to-orange-50 border border-amber-200 text-center">
+            <p className="text-xs text-slate-700 font-semibold mb-2">
+              Ingin memesan produk tertentu yang belum ada di daftar toko?
+            </p>
+            <button
+              onClick={() => setActiveTab('jastip')}
+              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs inline-flex items-center gap-1.5 shadow-xs transition"
             >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              <span>Jastip Sekarang!</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {promoProducts.map((prod) => (
               <div
-                onClick={() => onSelectProduct(prod)}
-                className="cursor-pointer space-y-2"
+                key={prod.id}
+                className="flex flex-col justify-between p-3 rounded-2xl bg-white border border-slate-200 hover:border-sky-300 shadow-2xs hover:shadow-md transition"
               >
-                <div className="relative aspect-square rounded-xl overflow-hidden bg-slate-100">
-                  <img
-                    src={prod.image_url}
-                    alt={prod.name}
-                    className="w-full h-full object-cover hover:scale-105 transition"
-                  />
-                  {prod.promo_price && (
-                    <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-rose-500 text-white text-[10px] font-bold shadow-xs">
-                      PROMO
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 block truncate">
-                    {prod.store_name}
-                  </span>
-                  <h4 className="text-xs font-bold text-slate-800 line-clamp-2 leading-snug">
-                    {prod.name}
-                  </h4>
-                </div>
-              </div>
-
-              <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-extrabold text-sky-600">
-                    {formatRupiah(prod.promo_price ?? prod.price)}
-                  </div>
-                  {prod.promo_price && (
-                    <div className="text-[10px] text-slate-400 line-through">
-                      {formatRupiah(prod.price)}
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => addToCart(prod, 1)}
-                  className="p-1.5 rounded-xl bg-sky-50 hover:bg-sky-600 text-sky-600 hover:text-white transition active:scale-95"
-                  title="Tambah ke Keranjang"
+                <div
+                  onClick={() => onSelectProduct(prod)}
+                  className="cursor-pointer space-y-2"
                 >
-                  <ShoppingBag className="w-3.5 h-3.5" />
-                </button>
+                  <div className="relative aspect-square rounded-xl overflow-hidden bg-slate-100">
+                    <img
+                      src={prod.image_url}
+                      alt={prod.name}
+                      className="w-full h-full object-cover hover:scale-105 transition"
+                    />
+                    {prod.promo_price && (
+                      <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-rose-500 text-white text-[10px] font-bold shadow-xs">
+                        PROMO
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block truncate">
+                      {prod.store_name}
+                    </span>
+                    <h4 className="text-xs font-bold text-slate-800 line-clamp-2 leading-snug">
+                      {prod.name}
+                    </h4>
+                  </div>
+                </div>
+
+                <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-extrabold text-sky-600">
+                      {formatRupiah(prod.promo_price ?? prod.price)}
+                    </div>
+                    {prod.promo_price && (
+                      <div className="text-[10px] text-slate-400 line-through">
+                        {formatRupiah(prod.price)}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => addToCart(prod, 1)}
+                    className="p-1.5 rounded-xl bg-sky-50 hover:bg-sky-600 text-sky-600 hover:text-white transition active:scale-95"
+                    title="Tambah ke Keranjang"
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Rute Antar Kota Singkawang - Bengkayang Info */}
