@@ -1,0 +1,6 @@
+{
+  "name": "PAYKAJASTIP",
+  "description": "Jastip, Belanja & Antar Barang di Singkawang. Platform lokal terpadu untuk jastip, toko UMKM, makanan, dan kurir delivery Singkawang.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

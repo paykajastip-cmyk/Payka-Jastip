@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0369a1" />
+    </linearGradient>
+    <linearGradient id="boxGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  
+  <!-- Rounded Base Background -->
+  <rect width="512" height="512" rx="108" fill="url(#bgGrad)" />
+  
+  <!-- Badge Element -->
+  <g filter="url(#shadow)" transform="translate(48, 48)">
+    <!-- Delivery parcel box -->
+    <path d="M208 72 L344 144 L344 290 L208 360 L72 290 L72 144 Z" fill="url(#boxGrad)" />
+    <!-- Box folds -->
+    <path d="M208 72 L344 144 L208 214 L72 144 Z" fill="#fbbf24" opacity="0.9" />
+    <path d="M208 214 L208 360 L344 290 L344 144 Z" fill="#d97706" opacity="0.4" />
+    <path d="M208 214 L208 360 L72 290 L72 144 Z" fill="#b45309" opacity="0.15" />
+    
+    <!-- Speed streaks / Express motion -->
+    <path d="M40 180 L110 180" stroke="#ffffff" stroke-width="12" stroke-linecap="round" opacity="0.9" />
+    <path d="M16 220 L86 220" stroke="#ffffff" stroke-width="14" stroke-linecap="round" opacity="0.9" />
+    <path d="M32 260 L92 260" stroke="#ffffff" stroke-width="12" stroke-linecap="round" opacity="0.9" />
+    
+    <!-- Pin Location / Singkawang Anchor -->
+    <circle cx="208" cy="180" r="28" fill="#ffffff" />
+    <path d="M208 208 L208 244" stroke="#ffffff" stroke-width="10" stroke-linecap="round" />
+    <circle cx="208" cy="180" r="14" fill="#0284c7" />
+  </g>
+  
+  <!-- Brand text badge -->
+  <text x="256" y="445" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="44" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="4">PAYKAJASTIP</text>
+</svg>
