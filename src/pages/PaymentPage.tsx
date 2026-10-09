@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft,
   Copy,
@@ -12,10 +12,17 @@ import {
   CreditCard,
   QrCode,
   ShieldCheck,
+  MessageCircle,
 } from 'lucide-react';
 import { Order, Payment } from '../types';
 import { useApp } from '../context/AppContext';
-import { formatRupiah, formatIndoDate } from '../utils/helpers';
+import { formatRupiah, formatIndoDate, createWhatsAppUrl } from '../utils/helpers';
+
+interface PaymentMethodItem {
+  id: 'QRIS' | 'BANK' | 'VA';
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
 
 interface PaymentPageProps {
   orderId: string;
@@ -35,10 +42,37 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
   const order = orders.find((o) => o.id === orderId);
   const payment = payments.find((p) => p.order_id === orderId);
 
+  const activePaymentMethods = useMemo<PaymentMethodItem[]>(() => {
+    const methods: PaymentMethodItem[] = [];
+
+    // QRIS
+    if (adminSettings.qris_active && (adminSettings.qris_image_url || adminSettings.payment_qr_url)) {
+      methods.push({ id: 'QRIS', label: 'QRIS', icon: QrCode });
+    }
+
+    // Bank Transfer
+    if (adminSettings.bank_active && (adminSettings.bank_account_number || adminSettings.payment_account_number)) {
+      methods.push({ id: 'BANK', label: adminSettings.bank_name || 'Transfer Bank', icon: CreditCard });
+    }
+
+    // Virtual Account
+    if (adminSettings.va_active && adminSettings.va_number) {
+      methods.push({ id: 'VA', label: adminSettings.va_provider || 'Virtual Account', icon: ShieldCheck });
+    }
+
+    return methods;
+  }, [adminSettings]);
+
   const [copied, setCopied] = useState(false);
-  const [selectedMethod, setSelectedMethod] = useState<'QRIS' | 'TRANSFER'>(
-    adminSettings.payment_qr_url ? 'QRIS' : 'TRANSFER'
-  );
+  const [selectedMethod, setSelectedMethod] = useState<'QRIS' | 'BANK' | 'VA'>('QRIS');
+
+  // Auto-select first active method
+  useEffect(() => {
+    if (activePaymentMethods.length > 0 && !activePaymentMethods.some((m: PaymentMethodItem) => m.id === selectedMethod)) {
+      setSelectedMethod(activePaymentMethods[0].id);
+    }
+  }, [activePaymentMethods]);
+
   const [proofFilePreview, setProofFilePreview] = useState<string | null>(
     payment?.proof_url || null
   );
@@ -62,10 +96,10 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
     );
   }
 
-  // Handle Copy Account Number
-  const handleCopyNumber = () => {
-    if (adminSettings.payment_account_number) {
-      navigator.clipboard.writeText(adminSettings.payment_account_number);
+  // Handle Copy Text (Bank / VA)
+  const handleCopyText = (text?: string) => {
+    if (text) {
+      navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -189,96 +223,116 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
       </div>
 
       {/* Check if Admin configured payment */}
-      {!adminSettings.is_payment_configured &&
-      !adminSettings.payment_account_number &&
-      !adminSettings.payment_qr_url ? (
-        <div className="p-6 bg-amber-50 rounded-3xl border border-amber-200 text-center space-y-2">
+      {activePaymentMethods.length === 0 ? (
+        <div className="p-6 bg-amber-50 rounded-3xl border border-amber-200 text-center space-y-3">
           <AlertCircle className="w-8 h-8 text-amber-600 mx-auto" />
-          <h4 className="text-sm font-bold text-amber-900">
-            Metode pembayaran belum dikonfigurasi oleh Admin
-          </h4>
-          <p className="text-xs text-amber-700">
-            Silakan hubungi WhatsApp Admin atau konfirmasi pesanan secara langsung.
-          </p>
+          <div>
+            <h4 className="text-sm font-bold text-amber-900">
+              Metode Pembayaran Belum Diaktifkan oleh Admin
+            </h4>
+            <p className="text-xs text-amber-700 mt-1">
+              Silakan hubungi WhatsApp Admin untuk instruksi nomor rekening atau pembayaran manual.
+            </p>
+          </div>
+          <a
+            href={createWhatsAppUrl(
+              adminSettings.whatsapp_admin,
+              `Halo Admin PAYKAJASTIP, saya ingin membayar pesanan #${order.order_number} sebesar ${formatRupiah(order.total_amount)}.`
+            )}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition"
+          >
+            <MessageCircle className="w-4 h-4" />
+            <span>Hubungi WhatsApp Admin</span>
+          </a>
         </div>
       ) : (
         <>
           {/* Payment Method Selector Tabs */}
           <div className="flex bg-slate-100 p-1 rounded-2xl gap-1">
-            <button
-              onClick={() => setSelectedMethod('QRIS')}
-              className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-                selectedMethod === 'QRIS'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <QrCode className="w-3.5 h-3.5" />
-              <span>QR Pembayaran / QRIS</span>
-            </button>
-
-            <button
-              onClick={() => setSelectedMethod('TRANSFER')}
-              className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-                selectedMethod === 'TRANSFER'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <CreditCard className="w-3.5 h-3.5" />
-              <span>Nomor E-Wallet / Bank</span>
-            </button>
+            {activePaymentMethods.map((m) => {
+              const Icon = m.icon;
+              const isSelected = selectedMethod === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setSelectedMethod(m.id)}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{m.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Payment Details Container */}
           <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-xs">
-            {selectedMethod === 'QRIS' ? (
+            {selectedMethod === 'QRIS' && (
               <div className="text-center space-y-3">
                 <span className="text-xs font-bold text-slate-700 block">
                   Scan QR Pembayaran PAYKAJASTIP
                 </span>
 
-                {adminSettings.payment_qr_url ? (
+                {adminSettings.qris_image_url || adminSettings.payment_qr_url ? (
                   <div className="w-56 h-56 mx-auto rounded-2xl overflow-hidden border-2 border-slate-200 p-2 bg-white shadow-xs">
                     <img
-                      src={adminSettings.payment_qr_url}
-                      alt="QR Pembayaran Resmi"
+                      src={adminSettings.qris_image_url || adminSettings.payment_qr_url}
+                      alt="QRIS Resmi Payka-Jastip"
                       className="w-full h-full object-contain"
                     />
                   </div>
                 ) : (
                   <div className="p-8 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-400">
-                    QR pembayaran belum diupload Admin. Silakan gunakan metode transfer e-wallet/bank.
+                    Gambar QRIS belum diunggah oleh admin.
                   </div>
                 )}
 
                 <div className="text-xs text-slate-500">
-                  Penerima Resmi: <strong>{adminSettings.payment_recipient_name || 'PAYKAJASTIP'}</strong>
+                  Nama Penerima: <strong>{adminSettings.qris_merchant_name || adminSettings.payment_recipient_name || 'PAYKAJASTIP'}</strong>
                 </div>
+
+                {adminSettings.qris_instructions && (
+                  <div className="p-3 bg-sky-50/70 border border-sky-100 rounded-2xl text-xs text-sky-900 text-left leading-relaxed">
+                    <p className="font-bold text-[11px] uppercase tracking-wide text-sky-700 mb-0.5">
+                      Instruksi QRIS:
+                    </p>
+                    <p>{adminSettings.qris_instructions}</p>
+                  </div>
+                )}
               </div>
-            ) : (
+            )}
+
+            {selectedMethod === 'BANK' && (
               <div className="space-y-3">
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
                   <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold block">
-                    Saluran Pembayaran
+                    Bank Tujuan Transfer
                   </span>
                   <div className="text-xs font-extrabold text-slate-800">
-                    {adminSettings.payment_channel_name || 'DANA / Bank Transfer'}
+                    {adminSettings.bank_name || 'Bank Transfer'}
                   </div>
 
                   <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
                     <div>
                       <span className="text-[10px] text-slate-400 block font-medium">
-                        Nomor Pembayaran / Rekening
+                        Nomor Rekening
                       </span>
                       <span className="text-sm font-mono font-black text-slate-900 tracking-wide">
-                        {adminSettings.payment_account_number || 'Belum diatur'}
+                        {adminSettings.bank_account_number || adminSettings.payment_account_number || 'Belum diatur'}
                       </span>
                     </div>
 
-                    {adminSettings.payment_account_number && (
+                    {(adminSettings.bank_account_number || adminSettings.payment_account_number) && (
                       <button
-                        onClick={handleCopyNumber}
+                        type="button"
+                        onClick={() => handleCopyText(adminSettings.bank_account_number || adminSettings.payment_account_number)}
                         className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-xs active:scale-95 transition"
                       >
                         {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -288,19 +342,66 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
                   </div>
 
                   <div className="text-xs text-slate-500 pt-1">
-                    Atas Nama: <strong>{adminSettings.payment_recipient_name || 'PAYKAJASTIP'}</strong>
+                    Atas Nama: <strong>{adminSettings.bank_recipient_name || adminSettings.payment_recipient_name || 'PAYKAJASTIP'}</strong>
                   </div>
                 </div>
+
+                {adminSettings.bank_instructions && (
+                  <div className="p-3 bg-sky-50/70 border border-sky-100 rounded-2xl text-xs text-sky-900 leading-relaxed">
+                    <p className="font-bold text-[11px] uppercase tracking-wide text-sky-700 mb-0.5">
+                      Instruksi Transfer Bank:
+                    </p>
+                    <p>{adminSettings.bank_instructions}</p>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Admin Instructions */}
-            {adminSettings.payment_instructions && (
-              <div className="p-3 bg-sky-50/70 border border-sky-100 rounded-2xl text-xs text-sky-900 leading-relaxed">
-                <p className="font-bold text-[11px] uppercase tracking-wide text-sky-700 mb-0.5">
-                  Petunjuk Transfer Admin:
-                </p>
-                <p>{adminSettings.payment_instructions}</p>
+            {selectedMethod === 'VA' && (
+              <div className="space-y-3">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold block">
+                    Penyedia Virtual Account
+                  </span>
+                  <div className="text-xs font-extrabold text-slate-800">
+                    {adminSettings.va_provider || 'Virtual Account'}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-medium">
+                        Nomor Virtual Account
+                      </span>
+                      <span className="text-sm font-mono font-black text-slate-900 tracking-wide">
+                        {adminSettings.va_number || 'Belum diatur'}
+                      </span>
+                    </div>
+
+                    {adminSettings.va_number && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyText(adminSettings.va_number)}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-xs active:scale-95 transition"
+                      >
+                        {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copied ? 'Tersalin' : 'Salin'}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="text-xs text-slate-500 pt-1">
+                    Atas Nama: <strong>{adminSettings.va_recipient_name || 'PAYKAJASTIP'}</strong>
+                  </div>
+                </div>
+
+                {adminSettings.va_instructions && (
+                  <div className="p-3 bg-sky-50/70 border border-sky-100 rounded-2xl text-xs text-sky-900 leading-relaxed">
+                    <p className="font-bold text-[11px] uppercase tracking-wide text-sky-700 mb-0.5">
+                      Instruksi Virtual Account:
+                    </p>
+                    <p>{adminSettings.va_instructions}</p>
+                  </div>
+                )}
               </div>
             )}
           </div>

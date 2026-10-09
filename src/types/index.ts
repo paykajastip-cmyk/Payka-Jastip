@@ -1,5 +1,5 @@
 export type UserRole = 'customer' | 'merchant' | 'driver' | 'admin';
-export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'need_revision';
 
 export interface Profile {
   id: string;
@@ -74,6 +74,7 @@ export interface Store {
   location_status: LocationStatus;
   is_active: boolean;
   is_demo?: boolean;
+  gmaps_link?: string;
   created_at: string;
 }
 
@@ -171,6 +172,9 @@ export interface Order {
   driver_id?: string;
   driver_name?: string;
   driver_phone?: string;
+  driver_lat?: number;
+  driver_lng?: number;
+  driver_location_updated_at?: string;
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -257,6 +261,7 @@ export interface Driver {
   total_deliveries: number;
   is_active: boolean;
   is_demo?: boolean;
+  last_location_update?: string;
   created_at: string;
 }
 
@@ -318,12 +323,31 @@ export interface Review {
   created_at: string;
 }
 
+export type NotificationType =
+  | 'order_created'
+  | 'order_confirmed'
+  | 'order_processing'
+  | 'order_ready'
+  | 'driver_assigned'
+  | 'driver_on_the_way'
+  | 'order_completed'
+  | 'payment_success'
+  | 'payment_failed'
+  | 'merchant_approved'
+  | 'merchant_rejected'
+  | 'driver_approved'
+  | 'driver_rejected'
+  | 'system'
+  | 'promo';
+
 export interface Notification {
   id: string;
   user_id: string;
+  role?: UserRole;
   title: string;
   message: string;
-  type: 'order' | 'payment' | 'delivery' | 'promo' | 'system';
+  type: NotificationType;
+  reference_id?: string;
   order_id?: string;
   is_read: boolean;
   created_at: string;
@@ -342,6 +366,26 @@ export interface AdminSettings {
   base_delivery_fee: number;
   per_km_fee: number;
   service_fee: number;
+
+  // A. Dedicated Virtual Account Settings
+  va_active: boolean;
+  va_provider: string; // e.g. "BCA Virtual Account", "Mandiri VA", "BRI VA", "BNI VA"
+  va_number: string;
+  va_recipient_name: string;
+  va_instructions: string;
+
+  // B. Dedicated Bank Transfer Settings
+  bank_active: boolean;
+  bank_name: string; // e.g. "Bank BCA", "Bank Mandiri", "Bank BRI", "Bank Kalbar"
+  bank_account_number: string;
+  bank_recipient_name: string;
+  bank_instructions: string;
+
+  // C. Dedicated QRIS Settings
+  qris_active: boolean;
+  qris_merchant_name: string;
+  qris_image_url: string;
+  qris_instructions: string;
 }
 
 export interface OsmPlace {

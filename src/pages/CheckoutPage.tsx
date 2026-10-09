@@ -19,6 +19,7 @@ import {
   calculateDistanceKm,
   calculateDeliveryFee,
 } from '../utils/helpers';
+import { LocationPickerModal } from '../components/Map/LocationPickerModal';
 
 interface CheckoutPageProps {
   onBack: () => void;
@@ -46,8 +47,10 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   // Form State
   const [customerName, setCustomerName] = useState(currentUser?.full_name || '');
   const [customerPhone, setCustomerPhone] = useState(currentUser?.phone || '');
-  const [deliveryAddress, setDeliveryAddress] = useState(userLocation.address);
-  const [orderType, setOrderType] = useState<'delivery' | 'pickup'>('delivery');
+  const [deliveryAddress, setDeliveryAddress] = useState(userLocation.address || 'Singkawang');
+  const [deliveryLat, setDeliveryLat] = useState<number>(userLocation.lat || 0.9056);
+  const [deliveryLng, setDeliveryLng] = useState<number>(userLocation.lng || 108.9868);
+  const [showLocationPicker, setShowLocationPicker] = useState<boolean>(false);
   const [orderNotes, setOrderNotes] = useState('');
   const [promoCodeInput, setPromoCodeInput] = useState('');
   const [appliedPromo, setAppliedPromo] = useState<any | null>(null);
@@ -91,14 +94,12 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
     return sum + p * item.quantity;
   }, 0);
 
-  // Calculate delivery fee for each store
+  // Calculate delivery fee for each store based on selected deliveryLat/deliveryLng
   const storeDeliveryFees = useMemo(() => {
-    if (orderType === 'pickup') return storeGroups.map(() => 0);
-
     return storeGroups.map(([, group]) => {
       const dist = calculateDistanceKm(
-        userLocation.lat,
-        userLocation.lng,
+        deliveryLat,
+        deliveryLng,
         group.store.latitude,
         group.store.longitude
       );
@@ -109,10 +110,10 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
         activeRate.minimum_rate
       );
     });
-  }, [storeGroups, orderType, userLocation, activeRate]);
+  }, [storeGroups, deliveryLat, deliveryLng, activeRate]);
 
   const totalDeliveryFee = storeDeliveryFees.reduce((a, b) => a + b, 0);
-  const serviceFee = orderType === 'delivery' ? activeRate.service_fee : 0;
+  const serviceFee = activeRate.service_fee;
 
   // Apply Promo discount calculation
   const discountAmount = useMemo(() => {
@@ -162,12 +163,13 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return;
-    if (!customerPhone || customerPhone.length < 9) {
-      alert('Mohon isi nomor WhatsApp yang valid.');
+    const cleanPhone = customerPhone.replace(/\D/g, '');
+    if (!customerPhone || cleanPhone.length < 9) {
+      alert('Mohon isi nomor WhatsApp aktif untuk konfirmasi pengantaran.');
       return;
     }
-    if (orderType === 'delivery' && !deliveryAddress) {
-      alert('Mohon isi alamat pengantaran.');
+    if (!deliveryAddress.trim()) {
+      alert('Mohon tentukan alamat lengkap pengantaran di Singkawang.');
       return;
     }
 
@@ -216,10 +218,10 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
           store_name: group.store.name,
           store_phone: group.store.whatsapp || group.store.phone || '081200000000',
           store_address: group.store.address,
-          delivery_address: orderType === 'delivery' ? deliveryAddress : 'Ambil di Toko',
-          delivery_lat: userLocation.lat,
-          delivery_lng: userLocation.lng,
-          order_type: orderType,
+          delivery_address: deliveryAddress,
+          delivery_lat: deliveryLat,
+          delivery_lng: deliveryLng,
+          order_type: 'delivery',
           items: orderItems,
           subtotal: storeSubtotal,
           delivery_fee: storeOngkir,
@@ -320,63 +322,77 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
           </div>
         </div>
 
-        {/* Order Delivery Method Card */}
+        {/* Order Delivery Method Card - Strictly Kurir Payka */}
         <div className="bg-white rounded-3xl border border-slate-200 p-4 space-y-3 shadow-xs">
-          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-sky-600 inline-block"></span>
-            <span>Metode Pengiriman</span>
-          </h3>
-
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setOrderType('delivery')}
-              className={`p-3 rounded-2xl border flex flex-col items-center gap-1 text-center transition ${
-                orderType === 'delivery'
-                  ? 'border-sky-600 bg-sky-50/70 text-sky-950 font-bold'
-                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Truck className="w-5 h-5 text-sky-600" />
-              <span className="text-xs">Diantar Kurir Payka</span>
-              <span className="text-[10px] text-slate-400 font-normal">
-                Langsung ke alamat rumah
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setOrderType('pickup')}
-              className={`p-3 rounded-2xl border flex flex-col items-center gap-1 text-center transition ${
-                orderType === 'pickup'
-                  ? 'border-sky-600 bg-sky-50/70 text-sky-950 font-bold'
-                  : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Store className="w-5 h-5 text-sky-600" />
-              <span className="text-xs">Ambil Sendiri di Toko</span>
-              <span className="text-[10px] text-slate-400 font-normal">Bebas biaya ongkir</span>
-            </button>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-sky-600 inline-block"></span>
+              <span>Metode Pengiriman</span>
+            </h3>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800">
+              Eksklusif Kurir Payka
+            </span>
           </div>
 
-          {orderType === 'delivery' && (
-            <div className="space-y-2 pt-1">
-              <label className="text-xs font-semibold text-slate-700 block">
-                Alamat Lengkap Pengantaran di Singkawang
-              </label>
-              <div className="relative">
-                <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <textarea
-                  required
-                  rows={2}
-                  value={deliveryAddress}
-                  onChange={(e) => setDeliveryAddress(e.target.value)}
-                  placeholder="Nama jalan, nomor rumah, patokan / kelurahan..."
-                  className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-sky-500"
-                />
-              </div>
+          <div className="p-3.5 rounded-2xl border border-sky-300 bg-sky-50/70 text-sky-950 flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-sky-600/30">
+              <Truck className="w-5 h-5 text-white" />
             </div>
-          )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-extrabold text-slate-900">Diantar Kurir Payka</span>
+                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">
+                  Resmi Singkawang
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
+                Pesanan dijemput kurir resmi Payka langsung dari toko dan diantarkan ke alamat tujuan Anda.
+              </p>
+            </div>
+          </div>
+
+          {/* Delivery Address & Map Pinpoint */}
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-700 block">
+                Alamat Lengkap Pengantaran di Singkawang <span className="text-rose-500">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowLocationPicker(true)}
+                className="text-xs font-bold text-sky-600 hover:text-sky-700 flex items-center gap-1 bg-sky-50 hover:bg-sky-100 px-2.5 py-1 rounded-xl border border-sky-200 transition active:scale-95"
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                <span>Pilih Titik di Peta</span>
+              </button>
+            </div>
+
+            <div className="relative">
+              <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <textarea
+                required
+                rows={2}
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
+                placeholder="Nama jalan, nomor rumah, patokan / kelurahan..."
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-sky-500 font-medium"
+              />
+            </div>
+
+            <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-[11px] text-slate-600">
+              <span className="flex items-center gap-1.5 truncate">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span>Titik Koordinat: [{deliveryLat.toFixed(5)}, {deliveryLng.toFixed(5)}]</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowLocationPicker(true)}
+                className="text-sky-600 font-bold hover:underline shrink-0 ml-2"
+              >
+                Ubah Titik
+              </button>
+            </div>
+          </div>
 
           <div>
             <label className="text-xs font-semibold text-slate-700 block mb-1">
@@ -454,18 +470,16 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
           </div>
 
           <div className="flex justify-between text-slate-600">
-            <span>Biaya Pengantaran ({orderType === 'delivery' ? 'Kurir' : 'Ambil Sendiri'})</span>
+            <span>Biaya Pengantaran (Kurir Payka)</span>
             <span className="font-semibold text-slate-800">
-              {orderType === 'delivery' ? formatRupiah(totalDeliveryFee) : 'GRATIS'}
+              {formatRupiah(totalDeliveryFee)}
             </span>
           </div>
 
-          {orderType === 'delivery' && (
-            <div className="flex justify-between text-slate-600">
-              <span>Biaya Layanan Aplikasi</span>
-              <span className="font-semibold text-slate-800">{formatRupiah(serviceFee)}</span>
-            </div>
-          )}
+          <div className="flex justify-between text-slate-600">
+            <span>Biaya Layanan Aplikasi</span>
+            <span className="font-semibold text-slate-800">{formatRupiah(serviceFee)}</span>
+          </div>
 
           {discountAmount > 0 && (
             <div className="flex justify-between text-emerald-600 font-bold">
@@ -500,6 +514,25 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
           </button>
         </div>
       </form>
+
+      {/* Interactive OpenStreetMap Delivery Location Picker Modal */}
+      {showLocationPicker && (
+        <LocationPickerModal
+          isOpen={showLocationPicker}
+          onClose={() => setShowLocationPicker(false)}
+          initialLat={deliveryLat}
+          initialLng={deliveryLng}
+          initialAddress={deliveryAddress}
+          storeLat={storeGroups[0]?.[1]?.store?.latitude}
+          storeLng={storeGroups[0]?.[1]?.store?.longitude}
+          storeName={storeGroups[0]?.[1]?.store?.name}
+          onSelectLocation={(lat, lng, addr) => {
+            setDeliveryLat(lat);
+            setDeliveryLng(lng);
+            if (addr) setDeliveryAddress(addr);
+          }}
+        />
+      )}
     </div>
   );
 };

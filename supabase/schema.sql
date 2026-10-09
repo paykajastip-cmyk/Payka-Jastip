@@ -344,24 +344,30 @@ CREATE TABLE IF NOT EXISTS public.promos (
   is_active BOOLEAN DEFAULT true
 );
 
--- 20. NOTIFICATIONS TABLE
+-- 20. NOTIFICATIONS TABLE (Strictly Per User)
 CREATE TABLE IF NOT EXISTS public.notifications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  role TEXT DEFAULT 'customer' CHECK (role IN ('customer', 'merchant', 'driver', 'admin')),
   title TEXT NOT NULL,
   message TEXT NOT NULL,
   type TEXT NOT NULL,
+  reference_id TEXT,
   order_id TEXT,
   is_read BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON public.notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON public.notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_created ON public.notifications(created_at DESC);
 
 -- 21. ADMIN SETTINGS TABLE
 CREATE TABLE IF NOT EXISTS public.admin_settings (
   id INTEGER PRIMARY KEY DEFAULT 1,
   app_name TEXT NOT NULL DEFAULT 'PAYKAJASTIP',
   tagline TEXT NOT NULL DEFAULT 'Jastip, Belanja & Antar Barang di Singkawang',
-  whatsapp_admin TEXT NOT NULL,
+  whatsapp_admin TEXT NOT NULL DEFAULT '081254321098',
   payment_recipient_name TEXT,
   payment_account_number TEXT,
   payment_channel_name TEXT,
@@ -371,6 +377,20 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
   base_delivery_fee NUMERIC(10, 2) DEFAULT 10000,
   per_km_fee NUMERIC(10, 2) DEFAULT 3000,
   service_fee NUMERIC(10, 2) DEFAULT 2000,
+  va_active BOOLEAN DEFAULT true,
+  va_provider TEXT DEFAULT 'BCA Virtual Account',
+  va_number TEXT DEFAULT '8271081254321098',
+  va_recipient_name TEXT DEFAULT 'PAYKA JASTIP SINGKAWANG',
+  va_instructions TEXT,
+  bank_active BOOLEAN DEFAULT true,
+  bank_name TEXT DEFAULT 'Bank BCA',
+  bank_account_number TEXT DEFAULT '8175283921',
+  bank_recipient_name TEXT DEFAULT 'PAYKA JASTIP SINGKAWANG',
+  bank_instructions TEXT,
+  qris_active BOOLEAN DEFAULT true,
+  qris_merchant_name TEXT DEFAULT 'PAYKAJASTIP SINGKAWANG (QRIS RESMI)',
+  qris_image_url TEXT,
+  qris_instructions TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -397,6 +417,14 @@ CREATE POLICY "Public can view active stores" ON public.stores FOR SELECT USING 
 CREATE POLICY "Public can view available products" ON public.products FOR SELECT USING (is_available = true);
 CREATE POLICY "Public can view active promos" ON public.promos FOR SELECT USING (is_active = true);
 CREATE POLICY "Public can read admin settings" ON public.admin_settings FOR SELECT USING (true);
+CREATE POLICY "Admin update admin settings" ON public.admin_settings FOR UPDATE USING (
+  true
+) WITH CHECK (
+  true
+);
+CREATE POLICY "Admin insert admin settings" ON public.admin_settings FOR INSERT WITH CHECK (
+  true
+);
 
 -- Authenticated Users Policies
 CREATE POLICY "Users view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
@@ -454,6 +482,26 @@ CREATE POLICY "Admin manage products" ON public.products FOR ALL USING (
 );
 CREATE POLICY "Admin manage payments" ON public.payments FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND LOWER(email) = 'paykajastip@gmail.com' AND role = 'admin')
+);
+
+-- Notifications RLS Policies (Strictly Isolated Per User)
+CREATE POLICY "Users select own notifications" ON public.notifications FOR SELECT USING (
+  auth.uid() = user_id OR
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND LOWER(email) = 'paykajastip@gmail.com' AND role = 'admin')
+);
+
+CREATE POLICY "Users update own notifications" ON public.notifications FOR UPDATE USING (
+  auth.uid() = user_id
+) WITH CHECK (
+  auth.uid() = user_id
+);
+
+CREATE POLICY "Users delete own notifications" ON public.notifications FOR DELETE USING (
+  auth.uid() = user_id
+);
+
+CREATE POLICY "Insert notifications for target user" ON public.notifications FOR INSERT WITH CHECK (
+  true
 );
 
 -- STORAGE BUCKETS

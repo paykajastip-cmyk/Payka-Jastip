@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   MapPin,
   Bell,
@@ -6,20 +6,18 @@ import {
   ShoppingBag,
   Bike,
   Store,
-  X,
   LogOut,
   LogIn,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { PWAInstallButton } from '../common/PWAInstallButton';
-import { formatIndoDate } from '../../utils/helpers';
 
 interface HeaderProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ activeTab: _activeTab, setActiveTab }) => {
+export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
   const {
     currentUser,
     logout,
@@ -27,13 +25,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab: _activeTab, setActive
     canAccessDriver,
     canAccessAdmin,
     userLocation,
-    notifications,
-    markNotificationRead,
+    unreadNotificationsCount,
   } = useApp();
-
-  const [showNotifModal, setShowNotifModal] = useState(false);
-
-  const unreadNotifs = notifications.filter((n) => !n.is_read);
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
@@ -77,16 +70,20 @@ export const Header: React.FC<HeaderProps> = ({ activeTab: _activeTab, setActive
             {/* PWA Install Button Header */}
             <PWAInstallButton compact={true} />
 
-            {/* Notifications Button */}
+            {/* Notifications Tab Button */}
             <button
-              onClick={() => setShowNotifModal(true)}
-              className="relative p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition"
-              title="Notifikasi"
+              onClick={() => setActiveTab('notifications')}
+              className={`relative p-2 rounded-xl transition ${
+                activeTab === 'notifications'
+                  ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-300'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+              title="Notifikasi Saya"
             >
               <Bell className="w-5 h-5" />
-              {unreadNotifs.length > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center animate-pulse">
-                  {unreadNotifs.length}
+              {currentUser && unreadNotificationsCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[9px] font-extrabold flex items-center justify-center animate-pulse shadow-xs">
+                  {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
                 </span>
               )}
             </button>
@@ -210,70 +207,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab: _activeTab, setActive
           </div>
         </div>
       </div>
-
-      {/* Notifications Drawer */}
-      {showNotifModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs px-4 py-8 sm:py-12 pt-[max(env(safe-area-inset-top),2rem)] pb-[max(env(safe-area-inset-bottom),2rem)] overflow-y-auto animate-in fade-in duration-200"
-          onClick={() => setShowNotifModal(false)}
-        >
-          <div
-            className="relative w-full max-w-sm sm:max-w-md bg-white rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col max-h-[min(82vh,580px)] my-auto animate-in zoom-in-95 duration-200 border border-slate-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-2">
-                <Bell className="w-4 h-4 text-sky-600" />
-                <h3 className="text-sm font-bold text-slate-900">Notifikasi Sistem</h3>
-              </div>
-              <button
-                onClick={() => setShowNotifModal(false)}
-                className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition active:scale-90"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="mt-3.5 flex-1 overflow-y-auto overscroll-contain space-y-2 pr-1 -mr-1 max-h-[calc(min(82vh,580px)-135px)]">
-              {notifications.length === 0 ? (
-                <div className="text-center py-8 text-xs text-slate-400">
-                  Belum ada notifikasi.
-                </div>
-              ) : (
-                notifications.map((n) => (
-                  <div
-                    key={n.id}
-                    onClick={() => markNotificationRead(n.id)}
-                    className={`p-3 rounded-2xl border text-xs cursor-pointer transition ${
-                      n.is_read
-                        ? 'bg-slate-50 border-slate-100 text-slate-600'
-                        : 'bg-sky-50/70 border-sky-200 text-slate-900 font-medium'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-bold text-slate-900">{n.title}</span>
-                      <span className="text-[10px] text-slate-400">
-                        {formatIndoDate(n.created_at)}
-                      </span>
-                    </div>
-                    <p className="text-[11px] leading-relaxed">{n.message}</p>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="mt-3.5 pt-3 border-t border-slate-100 shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowNotifModal(false)}
-                className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition active:scale-98"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </header>
   );
 };

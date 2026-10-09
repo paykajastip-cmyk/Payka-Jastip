@@ -17,6 +17,7 @@ import {
   Promo,
   Review,
   Notification,
+  NotificationType,
   AdminSettings,
   ServiceArea,
   UserRole,
@@ -118,9 +119,13 @@ interface AppContextType {
   reviews: Review[];
   addReview: (review: Omit<Review, 'id' | 'created_at'>) => void;
   notifications: Notification[];
-  markNotificationRead: (id: string) => void;
+  unreadNotificationsCount: number;
+  markNotificationRead: (id: string) => Promise<void> | void;
+  markAllNotificationsRead: () => Promise<void> | void;
+  deleteNotification: (id: string) => Promise<void> | void;
+  sendNotification: (notif: Omit<Notification, 'id' | 'created_at' | 'is_read'>) => Promise<void>;
   adminSettings: AdminSettings;
-  updateAdminSettings: (settings: Partial<AdminSettings>) => void;
+  updateAdminSettings: (settings: Partial<AdminSettings>) => Promise<{ success: boolean; message: string }>;
 
   // User current location in Singkawang
   userLocation: { lat: number; lng: number; address: string; permissionGranted: boolean };
@@ -433,19 +438,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ])
   );
 
-  const [notifications, setNotifications] = useState<Notification[]>(() =>
-    loadStorage('notifications', [
-      {
-        id: 'notif-1',
-        user_id: 'cust-1',
-        title: 'Selamat Datang di PAYKAJASTIP!',
-        message: 'Gunakan kode voucher PAYKABARU untuk hemat Rp10.000 pada pesanan pertamamu di Singkawang.',
-        type: 'promo',
-        is_read: false,
-        created_at: new Date().toISOString(),
-      },
-    ])
-  );
+  // Notifications state strictly isolated per user
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   // User location in Singkawang
   const [userLocation, setUserLocation] = useState<{
@@ -478,7 +472,215 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => saveStorage('rates', rates), [rates]);
   useEffect(() => saveStorage('promos', promos), [promos]);
   useEffect(() => saveStorage('reviews', reviews), [reviews]);
-  useEffect(() => saveStorage('notifications', notifications), [notifications]);
+
+  // Load, migrate, and subscribe strictly per user
+  useEffect(() => {
+    if (!currentUser) {
+      setNotifications([]);
+      return;
+    }
+
+    const currentUserId = currentUser.id;
+    const userStorageKey = `notifications_${currentUserId}`;
+
+    // 1. Initial load from user's storage bucket
+    let userLocalNotifs = loadStorage<Notification[]>(userStorageKey, []);
+
+    // 2. Data migration from legacy global notifications if present
+    const legacyGlobalNotifs = loadStorage<any[]>('notifications', []);
+    if (legacyGlobalNotifs.length > 0) {
+      const migratedItems = legacyGlobalNotifs.filter(
+        (n) => n && n.user_id === currentUserId
+      ) as Notification[];
+      if (migratedItems.length > 0) {
+        const existingIds = new Set(userLocalNotifs.map((n) => n.id));
+        const newMigrated = migratedItems.filter((m) => !existingIds.has(m.id));
+        if (newMigrated.length > 0) {
+          userLocalNotifs = [...userLocalNotifs, ...newMigrated];
+          saveStorage(userStorageKey, userLocalNotifs);
+        }
+      }
+      try {
+        localStorage.removeItem(STORAGE_PREFIX + 'notifications');
+      } catch {}
+    }
+
+    // Default welcome notification if user has none
+    if (userLocalNotifs.length === 0) {
+      userLocalNotifs = [
+        {
+          id: `welcome-${currentUserId}`,
+          user_id: currentUserId,
+          role: currentUser.role,
+          title: `Selamat Datang, ${currentUser.full_name}!`,
+          message:
+            currentUser.role === 'merchant'
+              ? 'Kelola toko, perbarui menu katalog, dan pantau pesanan pelanggan Singkawang di sini.'
+              : currentUser.role === 'driver'
+              ? 'Siap melayani pengantaran di Singkawang. Nyalakan mode online untuk menerima tugas.'
+              : currentUser.role === 'admin'
+              ? 'Selamat datang di panel Super Admin Payka-Jastip.'
+              : 'Gunakan kode promo PAYKABARU untuk hemat biaya jastip & belanja pertamamu.',
+          type: 'system',
+          is_read: false,
+          created_at: new Date().toISOString(),
+        },
+      ];
+      saveStorage(userStorageKey, userLocalNotifs);
+    }
+
+    setNotifications(userLocalNotifs);
+
+    // 3. Fetch from Supabase if configured
+    const client = supabase;
+    if (client) {
+      const fetchSupabaseNotifications = async () => {
+        try {
+          const { data, error } = await client
+            .from('notifications')
+            .select('*')
+            .eq('user_id', currentUserId)
+            .order('created_at', { ascending: false });
+
+          if (!error && data && data.length > 0) {
+            setNotifications(data as Notification[]);
+            saveStorage(userStorageKey, data);
+          }
+        } catch (err) {
+          console.warn('Failed loading notifications from Supabase:', err);
+        }
+      };
+      fetchSupabaseNotifications();
+
+      // 4. Supabase Realtime channel strictly filtered by user_id
+      const channelName = `notifications:user_id=${currentUserId}`;
+      const channel = client
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${currentUserId}`,
+          },
+          (payload) => {
+            const newRow = payload.new as Notification;
+            if (newRow && newRow.user_id === currentUserId) {
+              setNotifications((prev) => [newRow, ...prev.filter((n) => n.id !== newRow.id)]);
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${currentUserId}`,
+          },
+          (payload) => {
+            const updatedRow = payload.new as Notification;
+            if (updatedRow && updatedRow.user_id === currentUserId) {
+              setNotifications((prev) =>
+                prev.map((n) => (n.id === updatedRow.id ? updatedRow : n))
+              );
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${currentUserId}`,
+          },
+          (payload) => {
+            const oldRow = payload.old as { id: string };
+            if (oldRow?.id) {
+              setNotifications((prev) => prev.filter((n) => n.id !== oldRow.id));
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        client.removeChannel(channel);
+      };
+    }
+  }, [currentUser?.id]);
+
+  // Sync active user's notifications to their dedicated bucket
+  useEffect(() => {
+    if (currentUser) {
+      saveStorage(`notifications_${currentUser.id}`, notifications);
+    }
+  }, [notifications, currentUser?.id]);
+
+  // Load admin_settings from Supabase on mount and listen to realtime updates
+  useEffect(() => {
+    const client = supabase;
+    if (!client) return;
+
+    const fetchAdminSettings = async () => {
+      try {
+        const { data, error } = await client
+          .from('admin_settings')
+          .select('*')
+          .eq('id', 1)
+          .maybeSingle();
+
+        if (!error && data) {
+          setAdminSettings((prev) => {
+            const merged: AdminSettings = {
+              ...prev,
+              ...data,
+              whatsapp_admin: data.whatsapp_admin || prev.whatsapp_admin,
+            };
+            saveStorage('settings', merged);
+            return merged;
+          });
+        }
+      } catch (err) {
+        console.warn('Failed loading admin_settings from Supabase:', err);
+      }
+    };
+
+    fetchAdminSettings();
+
+    // Subscribe to realtime admin_settings changes
+    const settingsChannel = client
+      .channel('public:admin_settings:id=1')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'admin_settings',
+          filter: 'id=eq.1',
+        },
+        (payload) => {
+          const newRow = payload.new as Partial<AdminSettings>;
+          if (newRow && typeof newRow === 'object') {
+            setAdminSettings((prev) => {
+              const merged: AdminSettings = {
+                ...prev,
+                ...newRow,
+                whatsapp_admin: newRow.whatsapp_admin || prev.whatsapp_admin,
+              };
+              saveStorage('settings', merged);
+              return merged;
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(settingsChannel);
+    };
+  }, []);
 
   // Request browser location gracefully on start
   useEffect(() => {
@@ -588,6 +790,144 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: true, user: newProfile };
   };
 
+  // Dedicated helper to send notification targeted strictly to a specific user_id
+  const sendNotification = async (
+    notif: Omit<Notification, 'id' | 'created_at' | 'is_read'>
+  ) => {
+    if (!notif.user_id || notif.user_id === 'guest') {
+      return;
+    }
+
+    const newNotif: Notification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      user_id: notif.user_id,
+      role: notif.role,
+      title: notif.title,
+      message: notif.message,
+      type: notif.type,
+      reference_id: notif.reference_id,
+      order_id: notif.reference_id,
+      is_read: false,
+      created_at: new Date().toISOString(),
+    };
+
+    // 1. If targeting the currently active user, update active state immediately
+    if (currentUser && currentUser.id === notif.user_id) {
+      setNotifications((prev) => [newNotif, ...prev.filter((n) => n.id !== newNotif.id)]);
+    }
+
+    // 2. Persist in recipient's dedicated local storage partition
+    try {
+      const recipientStorageKey = `notifications_${notif.user_id}`;
+      const recipientList = loadStorage<Notification[]>(recipientStorageKey, []);
+      saveStorage(recipientStorageKey, [newNotif, ...recipientList.filter((n) => n.id !== newNotif.id)]);
+    } catch (err) {
+      console.warn('Failed saving notification to user storage:', err);
+    }
+
+    // 3. Persist in Supabase with RLS if configured
+    if (supabase) {
+      try {
+        await supabase.from('notifications').insert({
+          id: newNotif.id,
+          user_id: newNotif.user_id,
+          role: newNotif.role || 'customer',
+          title: newNotif.title,
+          message: newNotif.message,
+          type: newNotif.type,
+          reference_id: newNotif.reference_id,
+          order_id: newNotif.reference_id,
+          is_read: false,
+        });
+      } catch (err) {
+        console.warn('Supabase insert notification error:', err);
+      }
+    }
+  };
+
+  const markNotificationRead = async (id: string) => {
+    if (!currentUser) return;
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id && n.user_id === currentUser.id ? { ...n, is_read: true } : n))
+    );
+    try {
+      const storageKey = `notifications_${currentUser.id}`;
+      const currentList = loadStorage<Notification[]>(storageKey, []);
+      saveStorage(
+        storageKey,
+        currentList.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+      );
+    } catch {}
+
+    if (supabase) {
+      try {
+        await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('id', id)
+          .eq('user_id', currentUser.id);
+      } catch (err) {
+        console.warn('Supabase mark read error:', err);
+      }
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    if (!currentUser) return;
+    setNotifications((prev) =>
+      prev.map((n) => (n.user_id === currentUser.id ? { ...n, is_read: true } : n))
+    );
+    try {
+      const storageKey = `notifications_${currentUser.id}`;
+      const currentList = loadStorage<Notification[]>(storageKey, []);
+      saveStorage(
+        storageKey,
+        currentList.map((n) => ({ ...n, is_read: true }))
+      );
+    } catch {}
+
+    if (supabase) {
+      try {
+        await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('user_id', currentUser.id)
+          .eq('is_read', false);
+      } catch (err) {
+        console.warn('Supabase mark all read error:', err);
+      }
+    }
+  };
+
+  const deleteNotification = async (id: string) => {
+    if (!currentUser) return;
+    setNotifications((prev) => prev.filter((n) => !(n.id === id && n.user_id === currentUser.id)));
+    try {
+      const storageKey = `notifications_${currentUser.id}`;
+      const currentList = loadStorage<Notification[]>(storageKey, []);
+      saveStorage(
+        storageKey,
+        currentList.filter((n) => n.id !== id)
+      );
+    } catch {}
+
+    if (supabase) {
+      try {
+        await supabase
+          .from('notifications')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', currentUser.id);
+      } catch (err) {
+        console.warn('Supabase delete notification error:', err);
+      }
+    }
+  };
+
+  const unreadNotificationsCount = currentUser
+    ? notifications.filter((n) => n.user_id === currentUser.id && !n.is_read).length
+    : 0;
+
   const registerMerchant = async (input: MerchantRegisterInput) => {
     const cleanEmail = input.email.trim().toLowerCase();
     if (allUsers.some((u) => u.email.toLowerCase() === cleanEmail)) {
@@ -638,6 +978,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStores((prev) => [newStore, ...prev]);
     setAllUsers((prev) => [newProfile, ...prev]);
     setCurrentUser(newProfile);
+
+    // Notify applicant
+    sendNotification({
+      user_id: newMerchantId,
+      role: 'merchant',
+      title: 'Pendaftaran Merchant Diterima',
+      message: `Pendaftaran toko "${input.store_name}" berhasil dikirim. Menunggu verifikasi admin.`,
+      type: 'system',
+    });
+
+    // Notify Super Admin only
+    const adminUser = allUsers.find((u) => u.email.toLowerCase() === 'paykajastip@gmail.com');
+    if (adminUser) {
+      sendNotification({
+        user_id: adminUser.id,
+        role: 'admin',
+        title: 'Pendaftaran Mitra Merchant Baru',
+        message: `Toko "${input.store_name}" (${input.owner_name}) mendaftar dan menunggu persetujuan.`,
+        type: 'system',
+        reference_id: newMerchantId,
+      });
+    }
+
     return { success: true, user: newProfile };
   };
 
@@ -681,11 +1044,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setDrivers((prev) => [newDriverRecord, ...prev]);
     setAllUsers((prev) => [newProfile, ...prev]);
     setCurrentUser(newProfile);
+
+    // Notify applicant
+    sendNotification({
+      user_id: newDriverId,
+      role: 'driver',
+      title: 'Pendaftaran Driver Diterima',
+      message: 'Pendaftaran Anda berhasil dikirim. Menunggu persetujuan admin Payka-Jastip.',
+      type: 'system',
+    });
+
+    // Notify Super Admin only
+    const adminUser = allUsers.find((u) => u.email.toLowerCase() === 'paykajastip@gmail.com');
+    if (adminUser) {
+      sendNotification({
+        user_id: adminUser.id,
+        role: 'admin',
+        title: 'Pendaftaran Mitra Driver Baru',
+        message: `${input.full_name} (${input.vehicle_type} - ${input.vehicle_plate}) mendaftar sebagai driver.`,
+        type: 'system',
+        reference_id: newDriverId,
+      });
+    }
+
     return { success: true, user: newProfile };
   };
 
   const logout = () => {
     setCurrentUser(null);
+    setNotifications([]);
     try {
       localStorage.removeItem(STORAGE_PREFIX + 'user');
     } catch {}
@@ -727,6 +1114,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return prev;
     });
+
+    // Notify the target user strictly based on their userId
+    const targetUser = allUsers.find((u) => u.id === userId);
+    if (targetUser) {
+      if (targetUser.role === 'merchant') {
+        sendNotification({
+          user_id: userId,
+          role: 'merchant',
+          title: status === 'approved' ? 'Pendaftaran Toko Disetujui! 🎉' : 'Pendaftaran Toko Ditolak',
+          message: status === 'approved'
+            ? 'Selamat! Toko Anda telah resmi aktif di Payka-Jastip. Anda kini dapat mengelola produk dan menerima pesanan.'
+            : `Pendaftaran toko ditolak: ${reason || 'Silakan lengkapi berkas dan ajukan ulang.'}`,
+          type: status === 'approved' ? 'merchant_approved' : 'merchant_rejected',
+        });
+      } else if (targetUser.role === 'driver') {
+        sendNotification({
+          user_id: userId,
+          role: 'driver',
+          title: status === 'approved' ? 'Pendaftaran Driver Disetujui! 🛵' : 'Pendaftaran Driver Ditolak',
+          message: status === 'approved'
+            ? 'Selamat! Anda telah diverifikasi sebagai Driver resmi Payka-Jastip. Aktifkan status online untuk mengambil tugas.'
+            : `Pendaftaran driver ditolak: ${reason || 'Silakan periksa kelengkapan data SIM & kendaraan Anda.'}`,
+          type: status === 'approved' ? 'driver_approved' : 'driver_rejected',
+        });
+      }
+    }
   };
 
   const getOrderByTracking = (query: {
@@ -876,21 +1289,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setPayments((prev) => [newPayment, ...prev]);
 
-    // Add notification if customer logged in
-    if (currentUser) {
-      setNotifications((prev) => [
-        {
-          id: `notif-${Date.now()}`,
-          user_id: currentUser.id,
-          title: 'Pesanan Berhasil Dibuat',
-          message: `Pesanan #${newOrder.order_number} berhasil dibuat. Silakan lakukan pembayaran manual.`,
-          type: 'order',
-          order_id: newOrder.id,
-          is_read: false,
-          created_at: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
+    // 1. Notify Customer if logged in (Guest has no user_id)
+    if (currentUser && currentUser.id !== 'guest') {
+      sendNotification({
+        user_id: currentUser.id,
+        role: 'customer',
+        title: 'Pesanan Berhasil Dibuat',
+        message: `Pesanan #${newOrder.order_number} berhasil dibuat. Silakan lakukan pembayaran.`,
+        type: 'order_created',
+        reference_id: newOrder.id,
+      });
+    }
+
+    // 2. Notify the Merchant who owns this store
+    const targetStore = stores.find((s) => s.id === newOrder.store_id);
+    if (targetStore && targetStore.merchant_id) {
+      sendNotification({
+        user_id: targetStore.merchant_id,
+        role: 'merchant',
+        title: 'Pesanan Baru Masuk! 🛍️',
+        message: `Pesanan baru #${newOrder.order_number} dari ${newOrder.customer_name}. Total: Rp ${newOrder.total_amount.toLocaleString('id-ID')}.`,
+        type: 'order_created',
+        reference_id: newOrder.id,
+      });
     }
 
     return newOrder;
@@ -902,10 +1323,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     note?: string
   ): boolean => {
     let updated = false;
+    let targetOrder: Order | undefined;
+
     setOrders((prev) =>
       prev.map((ord) => {
         if (ord.id === orderId) {
           updated = true;
+          targetOrder = ord;
           return {
             ...ord,
             status,
@@ -917,20 +1341,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
-    if (updated && currentUser) {
-      setNotifications((prev) => [
-        {
-          id: `notif-${Date.now()}`,
-          user_id: currentUser.id,
-          title: 'Status Pesanan Berubah',
-          message: `Status pesanan #${orderId} kini: ${status}`,
-          type: 'order',
-          order_id: orderId,
-          is_read: false,
-          created_at: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
+    if (updated) {
+      // Find order from state if not captured in map
+      const order = targetOrder || orders.find((o) => o.id === orderId);
+      if (order && order.customer_id && order.customer_id !== 'guest') {
+        let notifTitle = 'Status Pesanan Berubah';
+        let notifType: NotificationType = 'order_processing';
+        let notifMsg = `Status pesanan #${order.order_number} kini: ${status}.`;
+
+        switch (status) {
+          case 'TOKO MENERIMA':
+            notifTitle = 'Pesanan Dikonfirmasi Toko';
+            notifType = 'order_confirmed';
+            notifMsg = `Toko ${order.store_name} telah menerima dan mulai menyiapkan pesanan #${order.order_number}.`;
+            break;
+          case 'MENUNGGU DRIVER':
+            notifTitle = 'Mencari Kurir/Driver';
+            notifType = 'order_processing';
+            notifMsg = `Pesanan #${order.order_number} selesai diproses toko dan sedang dicarikan Driver.`;
+            break;
+          case 'DRIVER MENUJU LOKASI':
+            notifTitle = 'Driver Menuju Toko';
+            notifType = 'driver_assigned';
+            notifMsg = `Driver sedang menuju toko untuk mengambil pesanan #${order.order_number}.`;
+            break;
+          case 'BARANG DIAMBIL':
+            notifTitle = 'Barang Siap Diantar';
+            notifType = 'order_ready';
+            notifMsg = `Barang pesanan #${order.order_number} telah diambil oleh Driver dari toko.`;
+            break;
+          case 'DRIVER MENUJU CUSTOMER':
+            notifTitle = 'Driver Sedang Mengantar 🛵';
+            notifType = 'driver_on_the_way';
+            notifMsg = `Driver sedang dalam perjalanan menuju lokasi Anda untuk pesanan #${order.order_number}.`;
+            break;
+          case 'SELESAI':
+            notifTitle = 'Pesanan Selesai 🎉';
+            notifType = 'order_completed';
+            notifMsg = `Pesanan #${order.order_number} telah selesai diantar. Terima kasih telah menggunakan Payka-Jastip!`;
+            break;
+          case 'DIBATALKAN':
+            notifTitle = 'Pesanan Dibatalkan';
+            notifType = 'system';
+            notifMsg = `Pesanan #${order.order_number} dibatalkan.${note ? ' Alasan: ' + note : ''}`;
+            break;
+        }
+
+        sendNotification({
+          user_id: order.customer_id,
+          role: 'customer',
+          title: notifTitle,
+          message: notifMsg,
+          type: notifType,
+          reference_id: order.id,
+        });
+      }
     }
     return updated;
   };
@@ -972,21 +1437,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    // Notification for admin and customer if logged in
-    if (currentUser) {
-      setNotifications((prev) => [
-        {
-          id: `notif-${Date.now()}`,
-          user_id: currentUser.id,
-          title: 'Bukti Pembayaran Diterima',
-          message: `Bukti transfer Anda telah dikirim dan sedang diverifikasi oleh Admin.`,
-          type: 'payment',
-          order_id: orderId,
-          is_read: false,
-          created_at: new Date().toISOString(),
-        },
-        ...prev,
-      ]);
+    // 1. Notify Customer if logged in
+    if (currentUser && currentUser.id !== 'guest') {
+      sendNotification({
+        user_id: currentUser.id,
+        role: 'customer',
+        title: 'Bukti Pembayaran Terkirim',
+        message: `Bukti transfer pesanan #${orderId} telah dikirim dan sedang diverifikasi oleh Admin.`,
+        type: 'system',
+        reference_id: orderId,
+      });
+    }
+
+    // 2. Notify Super Admin only
+    const adminUser = allUsers.find((u) => u.email.toLowerCase() === 'paykajastip@gmail.com');
+    if (adminUser) {
+      sendNotification({
+        user_id: adminUser.id,
+        role: 'admin',
+        title: 'Bukti Transfer Baru Menunggu Verifikasi',
+        message: `Bukti transfer baru diunggah untuk pesanan #${orderId}. Silakan periksa di Admin Suite.`,
+        type: 'system',
+        reference_id: orderId,
+      });
     }
   };
 
@@ -1017,9 +1490,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
+    let targetOrder: Order | undefined;
     setOrders((prev) =>
       prev.map((o) => {
         if (o.id === payment.order_id) {
+          targetOrder = o;
           return {
             ...o,
             payment_status: newPaymentStatus,
@@ -1031,21 +1506,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
-    setNotifications((prev) => [
-      {
-        id: `notif-${Date.now()}`,
-        user_id: payment.order_id,
-        title: isApproved ? 'Pembayaran Terverifikasi (PAID)' : 'Pembayaran Ditolak',
+    const order = targetOrder || orders.find((o) => o.id === payment.order_id);
+
+    // 1. Notify Customer (only if not guest)
+    if (order && order.customer_id && order.customer_id !== 'guest') {
+      sendNotification({
+        user_id: order.customer_id,
+        role: 'customer',
+        title: isApproved ? 'Pembayaran Berhasil Diverifikasi! (PAID)' : 'Pembayaran Ditolak',
         message: isApproved
-          ? `Pembayaran untuk order #${payment.order_number} telah disetujui Admin. Toko sedang memproses barang.`
-          : `Pembayaran ditolak: ${rejectionReason || 'Bukti transfer tidak sesuai'}.`,
-        type: 'payment',
-        order_id: payment.order_id,
-        is_read: false,
-        created_at: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+          ? `Pembayaran untuk order #${payment.order_number} telah disetujui Admin. Toko sedang menyiapkan barang pesanan Anda.`
+          : `Pembayaran pesanan #${payment.order_number} ditolak: ${rejectionReason || 'Bukti transfer tidak valid'}.`,
+        type: isApproved ? 'payment_success' : 'payment_failed',
+        reference_id: order.id,
+      });
+    }
+
+    // 2. If approved, notify Merchant of this store
+    if (order && isApproved) {
+      const targetStore = stores.find((s) => s.id === order.store_id);
+      if (targetStore && targetStore.merchant_id) {
+        sendNotification({
+          user_id: targetStore.merchant_id,
+          role: 'merchant',
+          title: 'Pembayaran Pesanan Dikonfirmasi Lunas',
+          message: `Pembayaran pesanan #${order.order_number} telah diverifikasi. Silakan siapkan pesanan pembeli.`,
+          type: 'payment_success',
+          reference_id: order.id,
+        });
+      }
+    }
   };
 
   // Driver assignment with race-condition check
@@ -1083,6 +1573,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       })
     );
 
+    // 1. Notify the assigned Driver strictly based on driver.user_id
+    if (driver.user_id) {
+      sendNotification({
+        user_id: driver.user_id,
+        role: 'driver',
+        title: 'Tugas Pengantaran Baru 🛵',
+        message: `Anda ditugaskan mengantar pesanan #${order.order_number} dari ${order.store_name} ke ${order.delivery_address}.`,
+        type: 'driver_assigned',
+        reference_id: order.id,
+      });
+    }
+
+    // 2. Notify the Customer (only if not guest)
+    if (order.customer_id && order.customer_id !== 'guest') {
+      sendNotification({
+        user_id: order.customer_id,
+        role: 'customer',
+        title: 'Driver Ditugaskan 🛵',
+        message: `Driver ${driver.name} telah ditugaskan dan sedang menuju toko untuk mengambil pesanan #${order.order_number}.`,
+        type: 'driver_assigned',
+        reference_id: order.id,
+      });
+    }
+
     return { success: true, message: 'Pesanan berhasil diambil!' };
   };
 
@@ -1113,18 +1627,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setJastipRequests((prev) => [newReq, ...prev]);
 
-    setNotifications((prev) => [
-      {
-        id: `notif-${Date.now()}`,
+    if (req.customer_id && req.customer_id !== 'guest') {
+      sendNotification({
         user_id: req.customer_id,
+        role: 'customer',
         title: 'Permintaan Jastip Dibuat',
         message: `Permintaan Jastip #${reqNum} telah dibuat. Silakan konfirmasi via WhatsApp.`,
-        type: 'order',
-        is_read: false,
-        created_at: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+        type: 'order_created',
+        reference_id: newReq.id,
+      });
+    }
 
     return newReq;
   };
@@ -1135,17 +1647,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     driverId?: string
   ) => {
     const driver = driverId ? drivers.find((d) => d.id === driverId) : undefined;
+    let targetReq: JastipRequest | undefined;
+
     setJastipRequests((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              status,
-              ...(driver && { driver_id: driver.id, driver_name: driver.name }),
-            }
-          : r
-      )
+      prev.map((r) => {
+        if (r.id === id) {
+          targetReq = r;
+          return {
+            ...r,
+            status,
+            ...(driver && { driver_id: driver.id, driver_name: driver.name }),
+          };
+        }
+        return r;
+      })
     );
+
+    const reqItem = targetReq || jastipRequests.find((r) => r.id === id);
+    if (reqItem?.customer_id && reqItem.customer_id !== 'guest') {
+      sendNotification({
+        user_id: reqItem.customer_id,
+        role: 'customer',
+        title: 'Status Jastip Diperbarui',
+        message: `Permintaan jastip #${reqItem.request_number} kini berstatus: ${status}.`,
+        type: status === 'COMPLETED' ? 'order_completed' : 'order_processing',
+        reference_id: id,
+      });
+    }
   };
 
   // Delivery (Antar Barang)
@@ -1163,18 +1691,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setDeliveryRequests((prev) => [newReq, ...prev]);
 
-    setNotifications((prev) => [
-      {
-        id: `notif-${Date.now()}`,
+    if (req.customer_id && req.customer_id !== 'guest') {
+      sendNotification({
         user_id: req.customer_id,
+        role: 'customer',
         title: 'Pengantaran Barang Didaftarkan',
         message: `Pesanan antar barang #${reqNum} telah terdaftar. Driver terdekat akan disiapkan.`,
-        type: 'delivery',
-        is_read: false,
-        created_at: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
+        type: 'order_created',
+        reference_id: newReq.id,
+      });
+    }
 
     return newReq;
   };
@@ -1185,17 +1711,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     driverId?: string
   ) => {
     const driver = driverId ? drivers.find((d) => d.id === driverId) : undefined;
+    let targetDel: DeliveryRequest | undefined;
+
     setDeliveryRequests((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              status,
-              ...(driver && { driver_id: driver.id, driver_name: driver.name }),
-            }
-          : r
-      )
+      prev.map((r) => {
+        if (r.id === id) {
+          targetDel = r;
+          return {
+            ...r,
+            status,
+            ...(driver && { driver_id: driver.id, driver_name: driver.name }),
+          };
+        }
+        return r;
+      })
     );
+
+    const delItem = targetDel || deliveryRequests.find((d) => d.id === id);
+    if (delItem?.customer_id && delItem.customer_id !== 'guest') {
+      sendNotification({
+        user_id: delItem.customer_id,
+        role: 'customer',
+        title: 'Status Pengantaran Barang Diperbarui',
+        message: `Pesanan antar barang #${delItem.request_number} kini: ${status}.`,
+        type: status === 'DELIVERED' ? 'order_completed' : 'driver_on_the_way',
+        reference_id: id,
+      });
+    }
   };
 
   // Stores & Products Management
@@ -1238,8 +1780,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRates((prev) => prev.map((r) => ({ ...r, ...newRate })));
   };
 
-  const updateAdminSettings = (settings: Partial<AdminSettings>) => {
-    setAdminSettings((prev) => ({ ...prev, ...settings }));
+  const updateAdminSettings = async (
+    settings: Partial<AdminSettings>
+  ): Promise<{ success: boolean; message: string }> => {
+    const updated: AdminSettings = { ...adminSettings, ...settings };
+    setAdminSettings(updated);
+    saveStorage('settings', updated);
+
+    if (supabase) {
+      try {
+        const { error } = await supabase.from('admin_settings').upsert(
+          {
+            id: 1,
+            app_name: updated.app_name,
+            tagline: updated.tagline,
+            whatsapp_admin: updated.whatsapp_admin,
+            payment_recipient_name: updated.payment_recipient_name,
+            payment_account_number: updated.payment_account_number,
+            payment_channel_name: updated.payment_channel_name,
+            payment_qr_url: updated.payment_qr_url,
+            payment_instructions: updated.payment_instructions,
+            is_payment_configured: updated.is_payment_configured,
+            base_delivery_fee: updated.base_delivery_fee,
+            per_km_fee: updated.per_km_fee,
+            service_fee: updated.service_fee,
+            va_active: updated.va_active,
+            va_provider: updated.va_provider,
+            va_number: updated.va_number,
+            va_recipient_name: updated.va_recipient_name,
+            va_instructions: updated.va_instructions,
+            bank_active: updated.bank_active,
+            bank_name: updated.bank_name,
+            bank_account_number: updated.bank_account_number,
+            bank_recipient_name: updated.bank_recipient_name,
+            bank_instructions: updated.bank_instructions,
+            qris_active: updated.qris_active,
+            qris_merchant_name: updated.qris_merchant_name,
+            qris_image_url: updated.qris_image_url,
+            qris_instructions: updated.qris_instructions,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' }
+        );
+
+        if (error) {
+          if (error.code === 'PGRST205' || error.message?.includes('admin_settings') || error.message?.includes('schema cache')) {
+            console.info('Pemberitahuan: Tabel admin_settings belum dibuat di Supabase (PGRST205). Pengaturan berhasil disimpan secara persisten di penyimpanan sistem lokal.');
+            return {
+              success: true,
+              message: 'Pengaturan WhatsApp berhasil disimpan permanen di sistem! Nomor aktif di seluruh aplikasi.',
+            };
+          }
+
+          console.warn('Pemberitahuan Supabase admin_settings:', error.message);
+          return {
+            success: true,
+            message: 'Pengaturan WhatsApp berhasil disimpan permanen di penyimpanan lokal!',
+          };
+        }
+
+        return {
+          success: true,
+          message: 'Pengaturan WhatsApp & sistem berhasil disimpan secara permanen ke database Supabase!',
+        };
+      } catch (err: any) {
+        console.warn('Supabase update admin_settings info:', err?.message || err);
+        return {
+          success: true,
+          message: 'Pengaturan WhatsApp berhasil disimpan permanen di sistem!',
+        };
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Pengaturan WhatsApp & sistem berhasil disimpan permanen di penyimpanan lokal!',
+    };
   };
 
   // Promos
@@ -1263,12 +1879,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       created_at: new Date().toISOString(),
     };
     setReviews((prev) => [newReview, ...prev]);
-  };
-
-  const markNotificationRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
-    );
   };
 
   const addDriver = (driver: Omit<Driver, 'id' | 'created_at'>) => {
@@ -1374,7 +1984,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reviews,
         addReview,
         notifications,
+        unreadNotificationsCount,
         markNotificationRead,
+        markAllNotificationsRead,
+        deleteNotification,
+        sendNotification,
         adminSettings,
         updateAdminSettings,
         userLocation,

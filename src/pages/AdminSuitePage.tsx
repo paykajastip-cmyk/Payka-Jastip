@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Shield,
   LayoutDashboard,
@@ -39,6 +39,8 @@ import {
   FileSpreadsheet,
   ToggleLeft,
   ToggleRight,
+  Copy,
+  Database,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -54,6 +56,8 @@ import {
   formatRupiah,
   formatIndoDate,
   formatWhatsAppNumber,
+  formatDisplayPhone,
+  isValidWhatsAppNumber,
   createWhatsAppUrl,
   calculateDistanceKm,
 } from '../utils/helpers';
@@ -203,6 +207,74 @@ export const AdminSuitePage: React.FC = () => {
 
   // Settings form states
   const [settingsForm, setSettingsForm] = useState(adminSettings);
+
+  // Sync settingsForm whenever adminSettings is updated or reloaded
+  useEffect(() => {
+    setSettingsForm(adminSettings);
+  }, [adminSettings]);
+
+  // WhatsApp Tab state & notification
+  const [waSaveLoading, setWaSaveLoading] = useState(false);
+  const [waSaveFeedback, setWaSaveFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [sqlCopied, setSqlCopied] = useState(false);
+  const [showSqlGuide, setShowSqlGuide] = useState(false);
+  const [settingsFeedback, setSettingsFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  const handleSaveWhatsApp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setWaSaveFeedback(null);
+
+    const raw = (settingsForm.whatsapp_admin || '').trim();
+    if (!raw) {
+      setWaSaveFeedback({
+        type: 'error',
+        message: 'Nomor WhatsApp Admin wajib diisi.',
+      });
+      return;
+    }
+
+    if (!isValidWhatsAppNumber(raw)) {
+      setWaSaveFeedback({
+        type: 'error',
+        message:
+          'Format nomor WhatsApp tidak valid. Masukkan nomor dengan format 08... atau 628... (minimal 9 digit angka).',
+      });
+      return;
+    }
+
+    const clean = raw.replace(/[^0-9]/g, '');
+    const normalized = clean.startsWith('62')
+      ? '0' + clean.slice(2)
+      : clean.startsWith('0')
+      ? clean
+      : '0' + clean;
+
+    setWaSaveLoading(true);
+    try {
+      const res = await updateAdminSettings({
+        ...settingsForm,
+        whatsapp_admin: normalized,
+      });
+      setSettingsForm((prev) => ({ ...prev, whatsapp_admin: normalized }));
+      setWaSaveFeedback({
+        type: res.success ? 'success' : 'error',
+        message: res.message,
+      });
+    } catch (err: any) {
+      setWaSaveFeedback({
+        type: 'error',
+        message: `Terjadi kesalahan saat menyimpan: ${err?.message || 'Error'}`,
+      });
+    } finally {
+      setWaSaveLoading(false);
+    }
+  };
 
   // Promo form state
   const [newPromoCode, setNewPromoCode] = useState('');
@@ -1953,49 +2025,351 @@ export const AdminSuitePage: React.FC = () => {
       )}
 
       {/* =========================================================================
-          TAB 14: WHATSAPP GATEWAY & TEMPLATES
+          TAB 14: WHATSAPP GATEWAY & CUSTOMER SUPPORT
       ========================================================================= */}
       {activeAdminTab === 'whatsapp' && (
         <div className="space-y-4">
-          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-2xs">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-              WhatsApp Integration &amp; Customer Support
-            </h3>
-            <p className="text-xs text-slate-500">
-              Konfigurasi nomor WhatsApp Admin resmi PAYKAJASTIP untuk konfirmasi pesanan, bantuan jastip dan customer service.
-            </p>
+          {/* Status Feedback Notification */}
+          {waSaveFeedback && (
+            <div
+              className={`p-4 rounded-2xl border flex items-start justify-between gap-3 shadow-2xs transition-all ${
+                waSaveFeedback.type === 'success'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : 'bg-rose-50 border-rose-200 text-rose-900'
+              }`}
+            >
+              <div className="flex items-start gap-2.5">
+                {waSaveFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <h4 className="text-xs font-bold">
+                    {waSaveFeedback.type === 'success' ? 'Pengaturan Berhasil Disimpan' : 'Penyimpanan Gagal'}
+                  </h4>
+                  <p className="text-xs mt-0.5 leading-relaxed">{waSaveFeedback.message}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWaSaveFeedback(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Card: Status Nomor Aktif Saat Ini di Database */}
+          <div className="bg-linear-to-r from-emerald-600 to-teal-700 text-white rounded-3xl p-5 shadow-sm space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-white/20 flex items-center justify-center">
+                  <Phone className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-200 block">
+                    Nomor WhatsApp Admin Aktif di Database
+                  </span>
+                  <h3 className="text-base sm:text-lg font-black tracking-tight">
+                    {formatDisplayPhone(adminSettings.whatsapp_admin)}
+                  </h3>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-white/20 text-white text-[10px] font-extrabold flex items-center gap-1.5 backdrop-blur-xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse"></span>
+                <span>Tersimpan di Sistem</span>
+              </span>
+            </div>
+            <div className="pt-2 border-t border-white/15 flex items-center justify-between text-xs text-emerald-100 flex-wrap gap-2">
+              <span>
+                Format Internasional: <strong>+{formatWhatsAppNumber(adminSettings.whatsapp_admin)}</strong>
+              </span>
+              <span>
+                Tautan: <strong>wa.me/{formatWhatsAppNumber(adminSettings.whatsapp_admin)}</strong>
+              </span>
+            </div>
+          </div>
+
+          {/* Form Pengaturan Nomor WhatsApp */}
+          <form
+            onSubmit={handleSaveWhatsApp}
+            className="bg-white rounded-3xl border border-slate-200 p-5 space-y-5 shadow-2xs"
+          >
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <MessageCircle className="w-4 h-4 text-emerald-600" />
+                  <span>Pengaturan Nomor WhatsApp Resmi Admin</span>
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Nomor ini digunakan sebagai kontak Customer Service resmi, konfirmasi pesanan jastip, kurir logistik, dan verifikasi pembayaran manual. Perubahan nomor yang disimpan langsung berlaku di seluruh website.
+              </p>
+            </div>
 
             <div className="space-y-3">
               <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Nomor WhatsApp Admin (08...):
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Nomor WhatsApp Admin (08... atau 628...):
                 </label>
-                <input
-                  type="text"
-                  value={settingsForm.whatsapp_admin}
-                  onChange={(e) => setSettingsForm({ ...settingsForm, whatsapp_admin: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 font-bold"
-                />
-              </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={settingsForm.whatsapp_admin}
+                    onChange={(e) => {
+                      setSettingsForm({ ...settingsForm, whatsapp_admin: e.target.value });
+                      if (waSaveFeedback) setWaSaveFeedback(null);
+                    }}
+                    placeholder="Contoh: 081254321098 atau 6281254321098"
+                    className={`w-full pl-3 pr-10 py-2.5 text-xs rounded-xl border font-bold tracking-wide focus:outline-hidden transition ${
+                      isValidWhatsAppNumber(settingsForm.whatsapp_admin)
+                        ? 'border-emerald-300 focus:border-emerald-500 bg-emerald-50/20'
+                        : settingsForm.whatsapp_admin.trim().length > 0
+                        ? 'border-rose-300 focus:border-rose-500 bg-rose-50/20'
+                        : 'border-slate-200 focus:border-sky-500'
+                    }`}
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {isValidWhatsAppNumber(settingsForm.whatsapp_admin) ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    ) : settingsForm.whatsapp_admin.trim().length > 0 ? (
+                      <AlertCircle className="w-4 h-4 text-rose-500" />
+                    ) : null}
+                  </div>
+                </div>
 
-              <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-emerald-950 block">Uji Tombol Chat WhatsApp CS:</span>
-                  <span className="text-[11px] text-emerald-800">
-                    Target: {formatWhatsAppNumber(settingsForm.whatsapp_admin)}
+                {/* Validation helper text */}
+                <div className="mt-1.5 flex items-center justify-between text-[11px]">
+                  {isValidWhatsAppNumber(settingsForm.whatsapp_admin) ? (
+                    <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                      <Check className="w-3 h-3 text-emerald-600" />
+                      <span>
+                        Format valid: +{formatWhatsAppNumber(settingsForm.whatsapp_admin)} (
+                        {formatDisplayPhone(settingsForm.whatsapp_admin)})
+                      </span>
+                    </span>
+                  ) : settingsForm.whatsapp_admin.trim().length > 0 ? (
+                    <span className="text-rose-600 font-semibold flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      <span>Nomor tidak valid (minimal 9 digit angka dengan awalan 08 / 628)</span>
+                    </span>
+                  ) : (
+                    <span className="text-slate-400">
+                      Gunakan format nomor seluler Indonesia yang aktif di WhatsApp
+                    </span>
+                  )}
+                  <span className="text-slate-400 font-mono">
+                    {settingsForm.whatsapp_admin.replace(/[^0-9]/g, '').length} digit
                   </span>
                 </div>
-                <a
-                  href={createWhatsAppUrl(settingsForm.whatsapp_admin, 'Halo CS PAYKAJASTIP, saya membutuhkan bantuan.')}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 text-white font-bold text-xs"
+              </div>
+
+              {/* Action Buttons: Simpan & Kirim Pesan Tes */}
+              <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                <button
+                  type="submit"
+                  disabled={waSaveLoading || !isValidWhatsAppNumber(settingsForm.whatsapp_admin)}
+                  className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition active:scale-95 ${
+                    waSaveLoading || !isValidWhatsAppNumber(settingsForm.whatsapp_admin)
+                      ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      : 'bg-sky-600 hover:bg-sky-700 text-white cursor-pointer'
+                  }`}
                 >
-                  Kirim Pesan Tes
+                  {waSaveLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Menyimpan ke Database...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Simpan Pengaturan</span>
+                    </>
+                  )}
+                </button>
+
+                <a
+                  href={
+                    isValidWhatsAppNumber(settingsForm.whatsapp_admin)
+                      ? createWhatsAppUrl(
+                          settingsForm.whatsapp_admin,
+                          'Halo Admin PAYKAJASTIP Singkawang, ini adalah pesan tes dari panel Super Admin.'
+                        )
+                      : '#'
+                  }
+                  target={isValidWhatsAppNumber(settingsForm.whatsapp_admin) ? '_blank' : undefined}
+                  rel="noopener noreferrer"
+                  onClick={(e) => {
+                    if (!isValidWhatsAppNumber(settingsForm.whatsapp_admin)) {
+                      e.preventDefault();
+                      setWaSaveFeedback({
+                        type: 'error',
+                        message: 'Masukkan nomor WhatsApp yang valid terlebih dahulu sebelum mengirim pesan tes.',
+                      });
+                    }
+                  }}
+                  className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition active:scale-95 ${
+                    isValidWhatsAppNumber(settingsForm.whatsapp_admin)
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
+                      : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                  }`}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Kirim Pesan Tes</span>
+                  <ExternalLink className="w-3.5 h-3.5 opacity-80" />
                 </a>
               </div>
             </div>
-          </div>
+
+            {/* Information Card on Where this WhatsApp number is used */}
+            <div className="pt-4 border-t border-slate-100 space-y-2">
+              <h4 className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+                Titik Integrasi Otomatis Nomor WhatsApp Admin:
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600">
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 mt-1.5"></span>
+                  <div>
+                    <strong className="text-slate-800">Tombol Mengambang (Floating WA):</strong>
+                    <p className="text-[11px] text-slate-500">Tombol hijau di pojok kanan bawah seluruh halaman.</p>
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 mt-1.5"></span>
+                  <div>
+                    <strong className="text-slate-800">Menu Profil &amp; Bantuan CS:</strong>
+                    <p className="text-[11px] text-slate-500">Tombol "Hubungi Layanan Bantuan (WhatsApp)".</p>
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 mt-1.5"></span>
+                  <div>
+                    <strong className="text-slate-800">Layanan Jastip:</strong>
+                    <p className="text-[11px] text-slate-500">Konfirmasi pemesanan jastip belanja pasar &amp; toko.</p>
+                  </div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 mt-1.5"></span>
+                  <div>
+                    <strong className="text-slate-800">Layanan Antar Barang:</strong>
+                    <p className="text-[11px] text-slate-500">Konfirmasi pengantaran logistik paket Singkawang-Bengkayang.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Supabase Database Cloud Sync Status & SQL Helper */}
+            <div className="pt-4 border-t border-slate-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-sky-600" />
+                  <span className="text-xs font-bold text-slate-800">
+                    Sinkronisasi Database Cloud Supabase
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSqlGuide(!showSqlGuide)}
+                  className="text-xs font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1"
+                >
+                  <span>{showSqlGuide ? 'Sembunyikan SQL' : 'Lihat Skrip SQL Supabase'}</span>
+                </button>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-600 space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <p className="text-[11px] text-slate-500">
+                    Pengaturan nomor WhatsApp selalu tersimpan permanen di sistem aplikasi. Untuk sinkronisasi otomatis ke proyek cloud Supabase Anda, pastikan tabel <code>admin_settings</code> telah dibuat melalui Supabase SQL Editor.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const sql = `-- Skrip Pembuatan Tabel admin_settings PAYKAJASTIP
+CREATE TABLE IF NOT EXISTS public.admin_settings (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  app_name TEXT NOT NULL DEFAULT 'PAYKAJASTIP',
+  tagline TEXT NOT NULL DEFAULT 'Jastip, Belanja & Antar Barang di Singkawang',
+  whatsapp_admin TEXT NOT NULL DEFAULT '081254321098',
+  payment_recipient_name TEXT,
+  payment_account_number TEXT,
+  payment_channel_name TEXT,
+  payment_qr_url TEXT,
+  payment_instructions TEXT,
+  is_payment_configured BOOLEAN DEFAULT false,
+  base_delivery_fee NUMERIC(10, 2) DEFAULT 10000,
+  per_km_fee NUMERIC(10, 2) DEFAULT 3000,
+  service_fee NUMERIC(10, 2) DEFAULT 2000,
+  va_active BOOLEAN DEFAULT true,
+  va_provider TEXT DEFAULT 'BCA Virtual Account',
+  va_number TEXT DEFAULT '8271081254321098',
+  va_recipient_name TEXT DEFAULT 'PAYKA JASTIP SINGKAWANG',
+  va_instructions TEXT,
+  bank_active BOOLEAN DEFAULT true,
+  bank_name TEXT DEFAULT 'Bank BCA',
+  bank_account_number TEXT DEFAULT '8175283921',
+  bank_recipient_name TEXT DEFAULT 'PAYKA JASTIP SINGKAWANG',
+  bank_instructions TEXT,
+  qris_active BOOLEAN DEFAULT true,
+  qris_merchant_name TEXT DEFAULT 'PAYKAJASTIP SINGKAWANG (QRIS RESMI)',
+  qris_image_url TEXT,
+  qris_instructions TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public can read admin settings" ON public.admin_settings;
+DROP POLICY IF EXISTS "Admin update admin settings" ON public.admin_settings;
+DROP POLICY IF EXISTS "Admin insert admin settings" ON public.admin_settings;
+
+CREATE POLICY "Public can read admin settings" ON public.admin_settings FOR SELECT USING (true);
+CREATE POLICY "Admin update admin settings" ON public.admin_settings FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Admin insert admin settings" ON public.admin_settings FOR INSERT WITH CHECK (true);
+
+INSERT INTO public.admin_settings (id, whatsapp_admin)
+VALUES (1, '081254321098')
+ON CONFLICT (id) DO NOTHING;`;
+                      navigator.clipboard.writeText(sql);
+                      setSqlCopied(true);
+                      setTimeout(() => setSqlCopied(false), 3000);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+                  >
+                    {sqlCopied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Skrip SQL Berhasil Disalin!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Salin Skrip SQL admin_settings</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {showSqlGuide && (
+                  <div className="mt-2 pt-2 border-t border-slate-200">
+                    <pre className="p-3 bg-slate-900 text-emerald-400 rounded-xl text-[11px] font-mono overflow-x-auto max-h-48 leading-relaxed">
+{`CREATE TABLE IF NOT EXISTS public.admin_settings (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  whatsapp_admin TEXT NOT NULL DEFAULT '081254321098',
+  app_name TEXT NOT NULL DEFAULT 'PAYKAJASTIP',
+  tagline TEXT NOT NULL DEFAULT 'Jastip, Belanja & Antar Barang di Singkawang',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public can read admin settings" ON public.admin_settings FOR SELECT USING (true);
+CREATE POLICY "Admin update admin settings" ON public.admin_settings FOR ALL USING (true);
+INSERT INTO public.admin_settings (id, whatsapp_admin) VALUES (1, '081254321098') ON CONFLICT (id) DO NOTHING;`}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </div>
+          </form>
         </div>
       )}
 
@@ -2004,13 +2378,42 @@ export const AdminSuitePage: React.FC = () => {
       ========================================================================= */}
       {activeAdminTab === 'settings' && (
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            updateAdminSettings(settingsForm);
-            alert('Pengaturan sistem PAYKAJASTIP berhasil disimpan!');
+            const res = await updateAdminSettings(settingsForm);
+            setSettingsFeedback({
+              type: res.success ? 'success' : 'error',
+              message: res.message,
+            });
           }}
           className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-2xs"
         >
+          {settingsFeedback && (
+            <div
+              className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-xs ${
+                settingsFeedback.type === 'success'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : 'bg-rose-50 border-rose-200 text-rose-900'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {settingsFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                )}
+                <span>{settingsFeedback.message}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSettingsFeedback(null)}
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
               Rekening Pembayaran &amp; Konfigurasi Sistem

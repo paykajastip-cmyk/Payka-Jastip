@@ -16,6 +16,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
+  Bell,
+  ChevronRight,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { PWAInstallButton } from '../components/common/PWAInstallButton';
@@ -36,6 +38,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ setActiveTab }) => {
     canAccessDriver,
     canAccessAdmin,
     orders,
+    unreadNotificationsCount,
   } = useApp();
 
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -112,6 +115,31 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ setActiveTab }) => {
             <MapPin className="w-4 h-4 text-sky-600 shrink-0" />
             <span className="truncate">{userLocation.address}</span>
           </div>
+
+          {/* Dedicated Notifikasi Menu Button */}
+          <button
+            onClick={() => setActiveTab('notifications')}
+            className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 hover:bg-sky-50/60 border border-slate-200/80 hover:border-sky-300 transition active:scale-98 text-left shadow-2xs"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <Bell className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <span>🔔 Notifikasi</span>
+                </p>
+                <p className="text-[11px] text-slate-500">Pemberitahuan & update pesanan Anda</p>
+              </div>
+            </div>
+            {unreadNotificationsCount > 0 ? (
+              <span className="px-2.5 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-extrabold shadow-2xs">
+                {unreadNotificationsCount} Baru
+              </span>
+            ) : (
+              <ChevronRight className="w-4 h-4 text-slate-400" />
+            )}
+          </button>
 
           {/* Role specific quick action */}
           {currentUser.role === 'customer' && (

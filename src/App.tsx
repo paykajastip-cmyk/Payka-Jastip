@@ -19,6 +19,7 @@ import { DriverPortalPage } from './pages/DriverPortalPage';
 import { MerchantPortalPage } from './pages/MerchantPortalPage';
 import { AdminSuitePage } from './pages/AdminSuitePage';
 import { ProfilePage } from './pages/ProfilePage';
+import { NotificationsPage } from './pages/NotificationsPage';
 import { SingkawangMap } from './components/Map/SingkawangMap';
 import { Store, Product, Order } from './types';
 
@@ -317,6 +318,14 @@ const MainAppContent: React.FC = () => {
 
         {/* 16. PROFILE & ACCOUNT */}
         {activeTab === 'profile' && <ProfilePage setActiveTab={setActiveTab} />}
+
+        {/* 17. NOTIFICATIONS - ISOLATED PER USER ACCOUNT */}
+        {activeTab === 'notifications' && (
+          <NotificationsPage
+            setActiveTab={setActiveTab}
+            onSelectOrder={handleSelectOrder}
+          />
+        )}
       </main>
 
       {/* Floating WhatsApp Action Button */}
