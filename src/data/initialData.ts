@@ -43,25 +43,36 @@ export const INITIAL_SETTINGS: AdminSettings = {
   per_km_fee: 3000,
   service_fee: 2000,
 
-  // A. Virtual Account
-  va_active: true,
-  va_provider: 'BCA Virtual Account',
-  va_number: '8271081254321098',
-  va_recipient_name: 'PAYKA JASTIP SINGKAWANG',
-  va_instructions: 'Buka m-BCA > Transfer > BCA Virtual Account > Masukkan nomor VA > Konfirmasi & upload bukti pembayaran.',
-
-  // B. Transfer Bank
+  // A. Pembayaran Bank
   bank_active: true,
   bank_name: 'Bank BCA',
   bank_account_number: '8175283921',
   bank_recipient_name: 'PAYKA JASTIP SINGKAWANG',
-  bank_instructions: 'Transfer manual ke rekening BCA di atas. Simpan resi transfer dan upload bukti pada halaman pembayaran pesanan.',
+  bank_instructions:
+    'Transfer manual ke rekening BCA di atas. Simpan resi transfer dan upload bukti pada halaman pembayaran pesanan.',
 
-  // C. QRIS
+  // B. Pembayaran Virtual Account
+  va_active: true,
+  va_provider: 'BCA Virtual Account',
+  va_number: '8271081254321098',
+  va_recipient_name: 'PAYKA JASTIP SINGKAWANG',
+  va_instructions:
+    'Buka m-BCA > Transfer > BCA Virtual Account > Masukkan nomor VA > Konfirmasi & upload bukti pembayaran.',
+
+  // C. Pembayaran DANA
+  dana_active: true,
+  dana_number: '081254321098',
+  dana_recipient_name: 'PAYKA JASTIP SINGKAWANG',
+  dana_instructions:
+    'Buka aplikasi DANA > Kirim > Masukkan nomor DANA di atas > Tulis nomor pesanan pada catatan transfer > Konfirmasi & upload screenshot bukti transfer.',
+
+  // D. Pembayaran QRIS
   qris_active: true,
   qris_merchant_name: 'PAYKAJASTIP SINGKAWANG (QRIS RESMI)',
-  qris_image_url: 'https://images.unsplash.com/photo-1595079672139-545c0250005d?auto=format&fit=crop&w=600&q=80',
-  qris_instructions: 'Scan kode QRIS menggunakan GoPay, OVO, DANA, BCA Mobile, atau aplikasi e-wallet / mobile banking apa pun. Upload tangkapan layar bukti bayar.',
+  qris_image_url:
+    'https://images.unsplash.com/photo-1595079672139-545c0250005d?auto=format&fit=crop&w=600&q=80',
+  qris_instructions:
+    'Scan kode QRIS menggunakan GoPay, OVO, DANA, BCA Mobile, atau aplikasi e-wallet / mobile banking apa pun. Upload tangkapan layar bukti bayar.',
 };
 
 export const INITIAL_RATES: ServiceRate[] = [

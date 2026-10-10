@@ -1265,6 +1265,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       total_amount: orderData.total_amount || 0,
       status: 'MENUNGGU KONFIRMASI',
       payment_status: 'waiting_payment',
+      payment_method: orderData.payment_method || 'BANK',
       notes: orderData.notes,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -1281,7 +1282,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `pay-${Date.now()}`,
       order_id: newOrder.id,
       order_number: newOrder.order_number,
-      payment_method: 'MANUAL_TRANSFER',
+      payment_method: orderData.payment_method || 'BANK',
       payment_status: 'waiting_payment',
       amount: newOrder.total_amount,
       created_at: new Date().toISOString(),
@@ -1804,16 +1805,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             base_delivery_fee: updated.base_delivery_fee,
             per_km_fee: updated.per_km_fee,
             service_fee: updated.service_fee,
-            va_active: updated.va_active,
-            va_provider: updated.va_provider,
-            va_number: updated.va_number,
-            va_recipient_name: updated.va_recipient_name,
-            va_instructions: updated.va_instructions,
             bank_active: updated.bank_active,
             bank_name: updated.bank_name,
             bank_account_number: updated.bank_account_number,
             bank_recipient_name: updated.bank_recipient_name,
             bank_instructions: updated.bank_instructions,
+            va_active: updated.va_active,
+            va_provider: updated.va_provider,
+            va_number: updated.va_number,
+            va_recipient_name: updated.va_recipient_name,
+            va_instructions: updated.va_instructions,
+            dana_active: updated.dana_active,
+            dana_number: updated.dana_number,
+            dana_recipient_name: updated.dana_recipient_name,
+            dana_instructions: updated.dana_instructions,
             qris_active: updated.qris_active,
             qris_merchant_name: updated.qris_merchant_name,
             qris_image_url: updated.qris_image_url,
@@ -1823,38 +1828,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           { onConflict: 'id' }
         );
 
+        // Determine specific label for success message
+        let methodLabel = 'Pengaturan';
+        if (settings.bank_name !== undefined || settings.bank_active !== undefined) {
+          methodLabel = 'Pengaturan Transfer Bank';
+        } else if (settings.va_provider !== undefined || settings.va_active !== undefined) {
+          methodLabel = 'Pengaturan Virtual Account';
+        } else if (settings.dana_number !== undefined || settings.dana_active !== undefined) {
+          methodLabel = 'Pengaturan DANA';
+        } else if (settings.qris_image_url !== undefined || settings.qris_active !== undefined) {
+          methodLabel = 'Pengaturan QRIS';
+        } else if (settings.whatsapp_admin !== undefined) {
+          methodLabel = 'Pengaturan WhatsApp Admin';
+        }
+
         if (error) {
           if (error.code === 'PGRST205' || error.message?.includes('admin_settings') || error.message?.includes('schema cache')) {
-            console.info('Pemberitahuan: Tabel admin_settings belum dibuat di Supabase (PGRST205). Pengaturan berhasil disimpan secara persisten di penyimpanan sistem lokal.');
+            console.info('Pemberitahuan: Tabel admin_settings belum dibuat di Supabase (PGRST205). Disimpan secara persisten di penyimpanan lokal.');
             return {
               success: true,
-              message: 'Pengaturan WhatsApp berhasil disimpan permanen di sistem! Nomor aktif di seluruh aplikasi.',
+              message: `${methodLabel} berhasil disimpan permanen di sistem & aktif di checkout!`,
             };
           }
 
           console.warn('Pemberitahuan Supabase admin_settings:', error.message);
           return {
             success: true,
-            message: 'Pengaturan WhatsApp berhasil disimpan permanen di penyimpanan lokal!',
+            message: `${methodLabel} berhasil disimpan permanen di penyimpanan lokal!`,
           };
         }
 
         return {
           success: true,
-          message: 'Pengaturan WhatsApp & sistem berhasil disimpan secara permanen ke database Supabase!',
+          message: `${methodLabel} berhasil disimpan secara permanen ke database Supabase!`,
         };
       } catch (err: any) {
         console.warn('Supabase update admin_settings info:', err?.message || err);
         return {
           success: true,
-          message: 'Pengaturan WhatsApp berhasil disimpan permanen di sistem!',
+          message: 'Pengaturan berhasil disimpan permanen di sistem!',
         };
       }
     }
 
     return {
       success: true,
-      message: 'Pengaturan WhatsApp & sistem berhasil disimpan permanen di penyimpanan lokal!',
+      message: 'Pengaturan berhasil disimpan permanen di penyimpanan lokal!',
     };
   };
 

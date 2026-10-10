@@ -169,6 +169,7 @@ export interface Order {
   status: OrderStatus;
   payment_status: PaymentStatus;
   payment_id?: string;
+  payment_method?: string;
   driver_id?: string;
   driver_name?: string;
   driver_phone?: string;
@@ -367,21 +368,27 @@ export interface AdminSettings {
   per_km_fee: number;
   service_fee: number;
 
-  // A. Dedicated Virtual Account Settings
-  va_active: boolean;
-  va_provider: string; // e.g. "BCA Virtual Account", "Mandiri VA", "BRI VA", "BNI VA"
-  va_number: string;
-  va_recipient_name: string;
-  va_instructions: string;
-
-  // B. Dedicated Bank Transfer Settings
+  // A. Dedicated Bank Transfer Settings
   bank_active: boolean;
   bank_name: string; // e.g. "Bank BCA", "Bank Mandiri", "Bank BRI", "Bank Kalbar"
   bank_account_number: string;
   bank_recipient_name: string;
   bank_instructions: string;
 
-  // C. Dedicated QRIS Settings
+  // B. Dedicated Virtual Account Settings
+  va_active: boolean;
+  va_provider: string; // e.g. "BCA Virtual Account", "Mandiri VA", "BRI VA", "BNI VA"
+  va_number: string;
+  va_recipient_name: string;
+  va_instructions: string;
+
+  // C. Dedicated DANA Settings
+  dana_active: boolean;
+  dana_number: string;
+  dana_recipient_name: string;
+  dana_instructions: string;
+
+  // D. Dedicated QRIS Settings
   qris_active: boolean;
   qris_merchant_name: string;
   qris_image_url: string;

@@ -173,13 +173,37 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                     </span>
                   </div>
 
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getStatusBadge(
-                      order.status
-                    )}`}
-                  >
-                    {order.status}
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                    {/* Payment Status Badge */}
+                    {order.payment_status === 'waiting_payment' && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                        Menunggu Pembayaran
+                      </span>
+                    )}
+                    {order.payment_status === 'waiting_confirmation' && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                        Menunggu Verifikasi Admin
+                      </span>
+                    )}
+                    {order.payment_status === 'paid' && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        Pembayaran Berhasil
+                      </span>
+                    )}
+                    {order.payment_status === 'failed' && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                        Pembayaran Ditolak
+                      </span>
+                    )}
+
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getStatusBadge(
+                        order.status
+                      )}`}
+                    >
+                      {order.status}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Items preview */}
@@ -235,6 +259,16 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                         className="px-2.5 py-1.5 rounded-xl bg-slate-100 text-amber-700 text-[11px] font-bold border border-amber-200"
                       >
                         Verifikasi Bukti
+                      </button>
+                    )}
+
+                    {order.payment_status === 'failed' && (
+                      <button
+                        onClick={() => onOpenPayment(order.id)}
+                        className="px-2.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold shadow-xs active:scale-95 transition flex items-center gap-1"
+                      >
+                        <CreditCard className="w-3.5 h-3.5" />
+                        <span>Upload Ulang Bukti</span>
                       </button>
                     )}
 

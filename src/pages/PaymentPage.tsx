@@ -13,13 +13,16 @@ import {
   QrCode,
   ShieldCheck,
   MessageCircle,
+  Wallet,
+  Building2,
+  Trash2,
 } from 'lucide-react';
 import { Order, Payment } from '../types';
 import { useApp } from '../context/AppContext';
 import { formatRupiah, formatIndoDate, createWhatsAppUrl } from '../utils/helpers';
 
 interface PaymentMethodItem {
-  id: 'QRIS' | 'BANK' | 'VA';
+  id: 'QRIS' | 'BANK' | 'VA' | 'DANA';
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }
@@ -45,33 +48,44 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
   const activePaymentMethods = useMemo<PaymentMethodItem[]>(() => {
     const methods: PaymentMethodItem[] = [];
 
-    // QRIS
-    if (adminSettings.qris_active && (adminSettings.qris_image_url || adminSettings.payment_qr_url)) {
-      methods.push({ id: 'QRIS', label: 'QRIS', icon: QrCode });
-    }
-
     // Bank Transfer
     if (adminSettings.bank_active && (adminSettings.bank_account_number || adminSettings.payment_account_number)) {
-      methods.push({ id: 'BANK', label: adminSettings.bank_name || 'Transfer Bank', icon: CreditCard });
+      methods.push({ id: 'BANK', label: adminSettings.bank_name || 'Bank', icon: CreditCard });
     }
 
     // Virtual Account
     if (adminSettings.va_active && adminSettings.va_number) {
-      methods.push({ id: 'VA', label: adminSettings.va_provider || 'Virtual Account', icon: ShieldCheck });
+      methods.push({ id: 'VA', label: adminSettings.va_provider || 'VA', icon: ShieldCheck });
+    }
+
+    // DANA
+    if (adminSettings.dana_active && adminSettings.dana_number) {
+      methods.push({ id: 'DANA', label: 'DANA', icon: Wallet });
+    }
+
+    // QRIS
+    if (adminSettings.qris_active && (adminSettings.qris_image_url || adminSettings.payment_qr_url)) {
+      methods.push({ id: 'QRIS', label: 'QRIS', icon: QrCode });
     }
 
     return methods;
   }, [adminSettings]);
 
   const [copied, setCopied] = useState(false);
-  const [selectedMethod, setSelectedMethod] = useState<'QRIS' | 'BANK' | 'VA'>('QRIS');
+  const [selectedMethod, setSelectedMethod] = useState<'QRIS' | 'BANK' | 'VA' | 'DANA'>('BANK');
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // Auto-select first active method
+  // Auto-select preferred method from order or first active method
   useEffect(() => {
-    if (activePaymentMethods.length > 0 && !activePaymentMethods.some((m: PaymentMethodItem) => m.id === selectedMethod)) {
-      setSelectedMethod(activePaymentMethods[0].id);
+    if (activePaymentMethods.length > 0) {
+      const orderPref = order?.payment_method as 'QRIS' | 'BANK' | 'VA' | 'DANA' | undefined;
+      if (orderPref && activePaymentMethods.some((m) => m.id === orderPref)) {
+        setSelectedMethod(orderPref);
+      } else if (!activePaymentMethods.some((m) => m.id === selectedMethod)) {
+        setSelectedMethod(activePaymentMethods[0].id);
+      }
     }
-  }, [activePaymentMethods]);
+  }, [activePaymentMethods, order?.payment_method]);
 
   const [proofFilePreview, setProofFilePreview] = useState<string | null>(
     payment?.proof_url || null
@@ -96,7 +110,7 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
     );
   }
 
-  // Handle Copy Text (Bank / VA)
+  // Handle Copy Text (Bank / VA / DANA)
   const handleCopyText = (text?: string) => {
     if (text) {
       navigator.clipboard.writeText(text);
@@ -107,11 +121,12 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
 
   // Handle File Input
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUploadError(null);
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert('Mohon pilih file gambar bukti transfer (JPG / PNG).');
+      setUploadError('Mohon pilih file gambar bukti transfer (JPG / JPEG / PNG).');
       return;
     }
 
@@ -126,8 +141,9 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
   // Submit Proof Action
   const handleSubmitProof = (e: React.FormEvent) => {
     e.preventDefault();
+    setUploadError(null);
     if (!proofFilePreview) {
-      alert('Mohon lampirkan foto bukti pembayaran transfer atau QRIS.');
+      setUploadError('Mohon lampirkan foto bukti pembayaran transfer atau QRIS.');
       return;
     }
 
@@ -404,6 +420,54 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
                 )}
               </div>
             )}
+
+            {selectedMethod === 'DANA' && (
+              <div className="space-y-3">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                  <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold block">
+                    Nomor Akun Dompet Digital DANA
+                  </span>
+                  <div className="text-xs font-extrabold text-slate-800">
+                    DANA Payka Official
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-medium">
+                        Nomor Akun DANA
+                      </span>
+                      <span className="text-sm font-mono font-black text-slate-900 tracking-wide">
+                        {adminSettings.dana_number || 'Belum diatur'}
+                      </span>
+                    </div>
+
+                    {adminSettings.dana_number && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopyText(adminSettings.dana_number)}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-xs active:scale-95 transition"
+                      >
+                        {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copied ? 'Tersalin' : 'Salin'}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="text-xs text-slate-500 pt-1">
+                    Atas Nama Akun: <strong>{adminSettings.dana_recipient_name || 'PAYKA JASTIP'}</strong>
+                  </div>
+                </div>
+
+                {adminSettings.dana_instructions && (
+                  <div className="p-3 bg-sky-50/70 border border-sky-100 rounded-2xl text-xs text-sky-900 leading-relaxed">
+                    <p className="font-bold text-[11px] uppercase tracking-wide text-sky-700 mb-0.5">
+                      Instruksi Transfer DANA:
+                    </p>
+                    <p>{adminSettings.dana_instructions}</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Upload Proof Form */}
@@ -415,6 +479,13 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
               <Upload className="w-4 h-4 text-sky-600" />
               <span>Unggah Bukti Transfer / Pembayaran</span>
             </h3>
+
+            {uploadError && (
+              <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-rose-800 text-xs">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{uploadError}</span>
+              </div>
+            )}
 
             <div className="border-2 border-dashed border-slate-200 hover:border-sky-400 rounded-2xl p-4 text-center cursor-pointer transition relative">
               <input
@@ -434,9 +505,23 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
                   <p className="text-xs text-slate-500 font-medium truncate">
                     {proofFileName || 'Foto bukti siap dikirim'}
                   </p>
-                  <span className="text-[11px] text-sky-600 font-bold underline">
-                    Klik untuk ganti foto
-                  </span>
+                  <div className="flex items-center justify-center gap-3 pt-1">
+                    <span className="text-[11px] text-sky-600 font-bold underline">
+                      Klik untuk ganti foto
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setProofFilePreview(null);
+                        setProofFileName('');
+                      }}
+                      className="text-[11px] text-rose-600 font-bold hover:underline flex items-center gap-0.5"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Hapus</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="py-4 space-y-2">

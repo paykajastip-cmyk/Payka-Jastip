@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft,
   MapPin,
@@ -11,6 +11,11 @@ import {
   FileText,
   CreditCard,
   ChevronRight,
+  QrCode,
+  Wallet,
+  Building2,
+  ShieldCheck,
+  Info,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { CartItem, Order, OrderItem } from '../types';
@@ -56,6 +61,80 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   const [appliedPromo, setAppliedPromo] = useState<any | null>(null);
   const [promoError, setPromoError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Active payment methods configured dynamically by Super Admin
+  const availablePaymentMethods = useMemo(() => {
+    const list: Array<{
+      id: 'BANK' | 'VA' | 'DANA' | 'QRIS';
+      name: string;
+      category: string;
+      accountNumber?: string;
+      recipientName?: string;
+      instructions?: string;
+      icon: React.ComponentType<{ className?: string }>;
+    }> = [];
+
+    // A. Pembayaran Bank
+    if (adminSettings.bank_active && (adminSettings.bank_account_number || adminSettings.payment_account_number)) {
+      list.push({
+        id: 'BANK',
+        name: adminSettings.bank_name || 'Transfer Bank',
+        category: 'Transfer Bank Manual',
+        accountNumber: adminSettings.bank_account_number || adminSettings.payment_account_number,
+        recipientName: adminSettings.bank_recipient_name || adminSettings.payment_recipient_name,
+        instructions: adminSettings.bank_instructions || 'Transfer sesuai nominal tagihan, simpan resi dan unggah bukti pembayaran.',
+        icon: Building2,
+      });
+    }
+
+    // B. Pembayaran Virtual Account
+    if (adminSettings.va_active && adminSettings.va_number) {
+      list.push({
+        id: 'VA',
+        name: adminSettings.va_provider || 'Virtual Account',
+        category: 'Virtual Account',
+        accountNumber: adminSettings.va_number,
+        recipientName: adminSettings.va_recipient_name,
+        instructions: adminSettings.va_instructions || 'Bayar melalui menu Virtual Account bank Anda lalu unggah bukti transfer.',
+        icon: ShieldCheck,
+      });
+    }
+
+    // C. Pembayaran DANA
+    if (adminSettings.dana_active && adminSettings.dana_number) {
+      list.push({
+        id: 'DANA',
+        name: 'DANA E-Wallet',
+        category: 'Dompet Digital DANA',
+        accountNumber: adminSettings.dana_number,
+        recipientName: adminSettings.dana_recipient_name || 'PAYKA JASTIP',
+        instructions: adminSettings.dana_instructions || 'Transfer saldo ke nomor akun DANA di atas dan kirim bukti tangkapan layar.',
+        icon: Wallet,
+      });
+    }
+
+    // D. Pembayaran QRIS
+    if (adminSettings.qris_active && (adminSettings.qris_image_url || adminSettings.payment_qr_url)) {
+      list.push({
+        id: 'QRIS',
+        name: adminSettings.qris_merchant_name || 'QRIS Resmi PAYKA',
+        category: 'Semua E-Wallet & Mobile Banking',
+        recipientName: adminSettings.qris_merchant_name || 'PAYKAJASTIP',
+        instructions: adminSettings.qris_instructions || 'Scan kode QRIS resmi via BCA Mobile, GoPay, OVO, ShopeePay, atau DANA.',
+        icon: QrCode,
+      });
+    }
+
+    return list;
+  }, [adminSettings]);
+
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'BANK' | 'VA' | 'DANA' | 'QRIS'>('BANK');
+
+  useEffect(() => {
+    if (availablePaymentMethods.length > 0 && !availablePaymentMethods.some((m) => m.id === selectedPaymentMethod)) {
+      setSelectedPaymentMethod(availablePaymentMethods[0].id);
+    }
+  }, [availablePaymentMethods, selectedPaymentMethod]);
 
   // Group cart items by store
   const storeGroups = useMemo(() => {
@@ -229,6 +308,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
           discount_amount: storeDiscount,
           promo_code: appliedPromo?.code,
           total_amount: Math.max(0, storeTotal),
+          payment_method: selectedPaymentMethod,
           notes: orderNotes,
         });
 
@@ -454,6 +534,98 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
               >
                 Hapus
               </button>
+            </div>
+          )}
+        </div>
+
+        {/* Payment Method Selector Card */}
+        <div className="bg-white rounded-3xl border border-slate-200 p-4 space-y-3 shadow-xs">
+          <div className="flex items-center justify-between pb-1 border-b border-slate-100">
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+              <CreditCard className="w-3.5 h-3.5 text-sky-600" />
+              <span>Metode Pembayaran Resmi</span>
+            </h3>
+            <span className="text-[10px] font-semibold text-slate-400">
+              {availablePaymentMethods.length} Metode Aktif
+            </span>
+          </div>
+
+          {availablePaymentMethods.length === 0 ? (
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1">
+              <div className="flex items-center gap-2 font-bold text-amber-800">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Metode Pembayaran Online Belum Diaktifkan</span>
+              </div>
+              <p className="text-[11px] text-amber-700 leading-relaxed">
+                Anda tetap dapat membuat pesanan. Admin akan memberikan rekening manual via WhatsApp.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-[11px] text-slate-500">
+                Pilih metode pembayaran yang Anda inginkan (hanya metode aktif dari Admin):
+              </p>
+
+              <div className="grid grid-cols-1 gap-2">
+                {availablePaymentMethods.map((m) => {
+                  const Icon = m.icon;
+                  const isSelected = selectedPaymentMethod === m.id;
+                  return (
+                    <div
+                      key={m.id}
+                      onClick={() => setSelectedPaymentMethod(m.id)}
+                      className={`p-3 rounded-2xl border cursor-pointer transition flex items-start gap-3 ${
+                        isSelected
+                          ? 'border-sky-500 bg-sky-50/50 shadow-xs'
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="pt-0.5">
+                        <div
+                          className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                            isSelected
+                              ? 'border-sky-600 bg-sky-600'
+                              : 'border-slate-300 bg-white'
+                          }`}
+                        >
+                          {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                            <Icon className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                            <span>{m.name}</span>
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 shrink-0">
+                            {m.id}
+                          </span>
+                        </div>
+
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          {m.category} {m.accountNumber ? `• ${m.accountNumber}` : ''}
+                        </p>
+
+                        {isSelected && m.instructions && (
+                          <div className="mt-2 p-2.5 rounded-xl bg-white border border-sky-200/70 text-[11px] text-slate-700 space-y-1">
+                            <div className="flex items-center gap-1 font-bold text-sky-700 text-[10px] uppercase">
+                              <Info className="w-3 h-3" />
+                              <span>Petunjuk Pembayaran:</span>
+                            </div>
+                            <p className="leading-relaxed text-slate-600">{m.instructions}</p>
+                            {m.recipientName && (
+                              <p className="text-[10px] text-slate-500 font-semibold pt-0.5">
+                                Penerima: {m.recipientName}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

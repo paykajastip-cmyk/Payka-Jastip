@@ -157,13 +157,13 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
           </div>
         )}
 
-        {/* Payment CTA Banner if not paid */}
+        {/* Payment CTA Banner for all 4 payment statuses */}
         {order.payment_status === 'waiting_payment' && (
           <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between gap-3">
             <div>
-              <h4 className="text-xs font-bold text-amber-900">Pembayaran Belum Dilakukan</h4>
+              <h4 className="text-xs font-bold text-amber-900">Menunggu Pembayaran</h4>
               <p className="text-[11px] text-amber-700">
-                Silakan transfer atau scan QR sebelum pesanan diproses.
+                Silakan transfer ke rekening resmi atau scan QRIS sebelum pesanan diproses.
               </p>
             </div>
             <button
@@ -171,6 +171,58 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
               className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs shrink-0 active:scale-95 transition"
             >
               Bayar Sekarang
+            </button>
+          </div>
+        )}
+
+        {order.payment_status === 'waiting_confirmation' && (
+          <div className="p-4 bg-sky-50 border border-sky-200 rounded-2xl flex items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <Clock className="w-5 h-5 text-sky-600 shrink-0 mt-0.5 animate-spin" />
+              <div>
+                <h4 className="text-xs font-bold text-sky-900">Menunggu Verifikasi Admin</h4>
+                <p className="text-[11px] text-sky-700 leading-relaxed">
+                  Bukti pembayaran sudah terkirim. Admin sedang memeriksa mutasi pembayaran Anda.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => onOpenPayment(order.id)}
+              className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-xs shrink-0 active:scale-95 transition"
+            >
+              Lihat Bukti
+            </button>
+          </div>
+        )}
+
+        {order.payment_status === 'paid' && (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2.5 text-emerald-900">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div>
+              <h4 className="text-xs font-bold">Pembayaran Berhasil (PAID)</h4>
+              <p className="text-[11px] text-emerald-700">
+                Pembayaran telah resmi diverifikasi oleh Admin. Toko sedang menyiapkan pesanan Anda.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {order.payment_status === 'failed' && (
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold text-rose-900">Pembayaran Ditolak</h4>
+                <p className="text-[11px] text-rose-700 leading-relaxed">
+                  Bukti transfer tidak sesuai atau tidak terbaca. Silakan kirim ulang bukti yang valid.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => onOpenPayment(order.id)}
+              className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs shrink-0 active:scale-95 transition"
+            >
+              Unggah Ulang
             </button>
           </div>
         )}

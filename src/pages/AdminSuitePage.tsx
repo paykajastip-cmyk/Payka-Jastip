@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Shield,
   LayoutDashboard,
@@ -41,6 +41,11 @@ import {
   ToggleRight,
   Copy,
   Database,
+  Upload,
+  Wallet,
+  Building2,
+  QrCode,
+  ShieldCheck,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -273,6 +278,237 @@ export const AdminSuitePage: React.FC = () => {
       });
     } finally {
       setWaSaveLoading(false);
+    }
+  };
+
+  // Section-specific payment states & feedbacks
+  const [bankSaveLoading, setBankSaveLoading] = useState(false);
+  const [bankSaveFeedback, setBankSaveFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  const [vaSaveLoading, setVaSaveLoading] = useState(false);
+  const [vaSaveFeedback, setVaSaveFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  const [danaSaveLoading, setDanaSaveLoading] = useState(false);
+  const [danaSaveFeedback, setDanaSaveFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  const [qrisSaveLoading, setQrisSaveLoading] = useState(false);
+  const [qrisSaveFeedback, setQrisSaveFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  const [ratesSaveLoading, setRatesSaveLoading] = useState(false);
+  const [ratesSaveFeedback, setRatesSaveFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  const qrisFileInputRef = useRef<HTMLInputElement>(null);
+
+  // A. Save Bank Settings Handler
+  const handleSaveBank = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setBankSaveFeedback(null);
+    if (!settingsForm.bank_name?.trim()) {
+      setBankSaveFeedback({ type: 'error', message: 'Nama bank wajib diisi.' });
+      return;
+    }
+    if (!settingsForm.bank_account_number?.trim()) {
+      setBankSaveFeedback({ type: 'error', message: 'Nomor rekening bank wajib diisi.' });
+      return;
+    }
+    if (!settingsForm.bank_recipient_name?.trim()) {
+      setBankSaveFeedback({ type: 'error', message: 'Nama pemilik rekening wajib diisi.' });
+      return;
+    }
+
+    setBankSaveLoading(true);
+    try {
+      const res = await updateAdminSettings({
+        bank_active: settingsForm.bank_active,
+        bank_name: settingsForm.bank_name.trim(),
+        bank_account_number: settingsForm.bank_account_number.trim(),
+        bank_recipient_name: settingsForm.bank_recipient_name.trim(),
+        bank_instructions: settingsForm.bank_instructions || '',
+        payment_account_number: settingsForm.bank_account_number.trim(),
+        payment_recipient_name: settingsForm.bank_recipient_name.trim(),
+      });
+      setBankSaveFeedback({
+        type: res.success ? 'success' : 'error',
+        message: res.message,
+      });
+    } catch (err: any) {
+      setBankSaveFeedback({
+        type: 'error',
+        message: `Gagal menyimpan pengaturan bank: ${err?.message || 'Error'}`,
+      });
+    } finally {
+      setBankSaveLoading(false);
+    }
+  };
+
+  // B. Save Virtual Account Settings Handler
+  const handleSaveVA = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setVaSaveFeedback(null);
+    if (!settingsForm.va_provider?.trim()) {
+      setVaSaveFeedback({ type: 'error', message: 'Nama penyedia Virtual Account wajib diisi.' });
+      return;
+    }
+    if (!settingsForm.va_number?.trim()) {
+      setVaSaveFeedback({ type: 'error', message: 'Nomor Virtual Account wajib diisi.' });
+      return;
+    }
+    if (!settingsForm.va_recipient_name?.trim()) {
+      setVaSaveFeedback({ type: 'error', message: 'Nama penerima Virtual Account wajib diisi.' });
+      return;
+    }
+
+    setVaSaveLoading(true);
+    try {
+      const res = await updateAdminSettings({
+        va_active: settingsForm.va_active,
+        va_provider: settingsForm.va_provider.trim(),
+        va_number: settingsForm.va_number.trim(),
+        va_recipient_name: settingsForm.va_recipient_name.trim(),
+        va_instructions: settingsForm.va_instructions || '',
+      });
+      setVaSaveFeedback({
+        type: res.success ? 'success' : 'error',
+        message: res.message,
+      });
+    } catch (err: any) {
+      setVaSaveFeedback({
+        type: 'error',
+        message: `Gagal menyimpan Virtual Account: ${err?.message || 'Error'}`,
+      });
+    } finally {
+      setVaSaveLoading(false);
+    }
+  };
+
+  // C. Save DANA Settings Handler
+  const handleSaveDana = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setDanaSaveFeedback(null);
+    if (!settingsForm.dana_number?.trim()) {
+      setDanaSaveFeedback({ type: 'error', message: 'Nomor akun DANA wajib diisi.' });
+      return;
+    }
+    if (!settingsForm.dana_recipient_name?.trim()) {
+      setDanaSaveFeedback({ type: 'error', message: 'Nama pemilik akun DANA wajib diisi.' });
+      return;
+    }
+
+    setDanaSaveLoading(true);
+    try {
+      const res = await updateAdminSettings({
+        dana_active: settingsForm.dana_active,
+        dana_number: settingsForm.dana_number.trim(),
+        dana_recipient_name: settingsForm.dana_recipient_name.trim(),
+        dana_instructions: settingsForm.dana_instructions || '',
+      });
+      setDanaSaveFeedback({
+        type: res.success ? 'success' : 'error',
+        message: res.message,
+      });
+    } catch (err: any) {
+      setDanaSaveFeedback({
+        type: 'error',
+        message: `Gagal menyimpan akun DANA: ${err?.message || 'Error'}`,
+      });
+    } finally {
+      setDanaSaveLoading(false);
+    }
+  };
+
+  // D. Save QRIS Settings Handler
+  const handleSaveQris = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setQrisSaveFeedback(null);
+    setQrisSaveLoading(true);
+    try {
+      const res = await updateAdminSettings({
+        qris_active: settingsForm.qris_active,
+        qris_merchant_name: settingsForm.qris_merchant_name?.trim() || '',
+        qris_image_url: settingsForm.qris_image_url?.trim() || '',
+        payment_qr_url: settingsForm.qris_image_url?.trim() || '',
+        qris_instructions: settingsForm.qris_instructions || '',
+      });
+      setQrisSaveFeedback({
+        type: res.success ? 'success' : 'error',
+        message: res.message,
+      });
+    } catch (err: any) {
+      setQrisSaveFeedback({
+        type: 'error',
+        message: `Gagal menyimpan QRIS: ${err?.message || 'Error'}`,
+      });
+    } finally {
+      setQrisSaveLoading(false);
+    }
+  };
+
+  // QRIS File Upload Handler
+  const handleQrisFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setQrisSaveFeedback({
+        type: 'error',
+        message: 'File yang dipilih harus berupa file gambar (JPG, JPEG, PNG, atau WebP).',
+      });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (ev.target?.result) {
+        setSettingsForm((prev) => ({
+          ...prev,
+          qris_image_url: ev.target!.result as string,
+        }));
+        setQrisSaveFeedback({
+          type: 'success',
+          message: 'Gambar QRIS berhasil dimuat! Klik tombol "Simpan Pengaturan QRIS" di bawah untuk menyimpan.',
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // E. Save Rates & System Config Handler
+  const handleSaveRatesAndSystem = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setRatesSaveFeedback(null);
+    setRatesSaveLoading(true);
+    try {
+      const res = await updateAdminSettings({
+        base_delivery_fee: Number(settingsForm.base_delivery_fee) || 10000,
+        per_km_fee: Number(settingsForm.per_km_fee) || 3000,
+        service_fee: Number(settingsForm.service_fee) || 2000,
+        app_name: settingsForm.app_name || 'PAYKAJASTIP',
+        tagline: settingsForm.tagline || '',
+      });
+      setRatesSaveFeedback({
+        type: res.success ? 'success' : 'error',
+        message: res.message,
+      });
+    } catch (err: any) {
+      setRatesSaveFeedback({
+        type: 'error',
+        message: `Gagal menyimpan tarif sistem: ${err?.message || 'Error'}`,
+      });
+    } finally {
+      setRatesSaveLoading(false);
     }
   };
 
@@ -2301,16 +2537,20 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
   base_delivery_fee NUMERIC(10, 2) DEFAULT 10000,
   per_km_fee NUMERIC(10, 2) DEFAULT 3000,
   service_fee NUMERIC(10, 2) DEFAULT 2000,
-  va_active BOOLEAN DEFAULT true,
-  va_provider TEXT DEFAULT 'BCA Virtual Account',
-  va_number TEXT DEFAULT '8271081254321098',
-  va_recipient_name TEXT DEFAULT 'PAYKA JASTIP SINGKAWANG',
-  va_instructions TEXT,
   bank_active BOOLEAN DEFAULT true,
   bank_name TEXT DEFAULT 'Bank BCA',
   bank_account_number TEXT DEFAULT '8175283921',
   bank_recipient_name TEXT DEFAULT 'PAYKA JASTIP SINGKAWANG',
   bank_instructions TEXT,
+  va_active BOOLEAN DEFAULT true,
+  va_provider TEXT DEFAULT 'BCA Virtual Account',
+  va_number TEXT DEFAULT '8271081254321098',
+  va_recipient_name TEXT DEFAULT 'PAYKA JASTIP SINGKAWANG',
+  va_instructions TEXT,
+  dana_active BOOLEAN DEFAULT true,
+  dana_number TEXT DEFAULT '081254321098',
+  dana_recipient_name TEXT DEFAULT 'PAYKA JASTIP SINGKAWANG',
+  dana_instructions TEXT,
   qris_active BOOLEAN DEFAULT true,
   qris_merchant_name TEXT DEFAULT 'PAYKAJASTIP SINGKAWANG (QRIS RESMI)',
   qris_image_url TEXT,
@@ -2374,139 +2614,840 @@ INSERT INTO public.admin_settings (id, whatsapp_admin) VALUES (1, '081254321098'
       )}
 
       {/* =========================================================================
-          TAB 15: SETTINGS & PAYMENT CONFIGURATION
+          TAB 15: SETTINGS & PAYMENT CONFIGURATION (PISAHKAN METODE PEMBAYARAN)
       ========================================================================= */}
       {activeAdminTab === 'settings' && (
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const res = await updateAdminSettings(settingsForm);
-            setSettingsFeedback({
-              type: res.success ? 'success' : 'error',
-              message: res.message,
-            });
-          }}
-          className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-2xs"
-        >
-          {settingsFeedback && (
-            <div
-              className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-xs ${
-                settingsFeedback.type === 'success'
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                  : 'bg-rose-50 border-rose-200 text-rose-900'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                {settingsFeedback.type === 'success' ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                )}
-                <span>{settingsFeedback.message}</span>
+        <div className="space-y-5">
+          {/* Top Banner Info */}
+          <div className="bg-gradient-to-r from-sky-600 to-sky-700 rounded-3xl p-5 text-white shadow-md space-y-1.5">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-5 h-5" />
+              <h3 className="text-sm font-black uppercase tracking-wider">
+                Rekening Pembayaran &amp; Konfigurasi Sistem
+              </h3>
+            </div>
+            <p className="text-xs text-sky-100 leading-relaxed max-w-2xl">
+              Pengaturan rekening dipisahkan menjadi 4 metode mandiri (Bank, Virtual Account, DANA, dan QRIS).
+              Setiap metode yang diaktifkan akan <strong>otomatis tampil di halaman checkout pelanggan</strong>.
+              Metode yang dinonaktifkan tidak akan ditampilkan kepada pelanggan.
+            </p>
+          </div>
+
+          {/* =====================================================================
+              A. PEMBAYARAN BANK
+          ===================================================================== */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-2xs">
+            {/* Header & Status Indicator */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <span>A. Pembayaran Bank</span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        settingsForm.bank_active
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {settingsForm.bank_active ? '● AKTIF DI CHECKOUT' : '○ NONAKTIF'}
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Transfer manual antar rekening (BCA, Mandiri, BRI, Bank Kalbar, dll)
+                  </p>
+                </div>
               </div>
+
+              {/* Status Toggle Button */}
               <button
                 type="button"
-                onClick={() => setSettingsFeedback(null)}
-                className="text-slate-400 hover:text-slate-700"
+                onClick={() =>
+                  setSettingsForm((prev) => ({ ...prev, bank_active: !prev.bank_active }))
+                }
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto ${
+                  settingsForm.bank_active
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                    : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
+                }`}
               >
-                <X className="w-4 h-4" />
+                {settingsForm.bank_active ? (
+                  <>
+                    <ToggleRight className="w-4 h-4 text-emerald-600" />
+                    <span>Status: Aktif</span>
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft className="w-4 h-4 text-slate-400" />
+                    <span>Status: Nonaktif</span>
+                  </>
+                )}
               </button>
             </div>
-          )}
 
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-              Rekening Pembayaran &amp; Konfigurasi Sistem
-            </h3>
-            <button
-              type="submit"
-              className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-xs"
-            >
-              Simpan Pengaturan
-            </button>
+            {/* Inline Feedback Banner */}
+            {bankSaveFeedback && (
+              <div
+                className={`p-3 rounded-2xl border flex items-center justify-between gap-2 text-xs animate-in fade-in ${
+                  bankSaveFeedback.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {bankSaveFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>{bankSaveFeedback.message}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBankSaveFeedback(null)}
+                  className="text-slate-400 hover:text-slate-700"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Bank Form Fields */}
+            <form onSubmit={handleSaveBank} className="space-y-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Nama Bank:</label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.bank_name || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, bank_name: e.target.value })
+                    }
+                    placeholder="Contoh: Bank BCA / Mandiri / BRI"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-semibold focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Nomor Rekening Bank:</label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.bank_account_number || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, bank_account_number: e.target.value })
+                    }
+                    placeholder="Contoh: 8175283921"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono font-bold focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Nama Pemilik Rekening:</label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.bank_recipient_name || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, bank_recipient_name: e.target.value })
+                    }
+                    placeholder="Contoh: PAYKA JASTIP SINGKAWANG"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-semibold focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Instruksi Pembayaran Manual Bank (Ditampilkan ke Pelanggan):
+                </label>
+                <textarea
+                  rows={2}
+                  value={settingsForm.bank_instructions || ''}
+                  onChange={(e) =>
+                    setSettingsForm({ ...settingsForm, bank_instructions: e.target.value })
+                  }
+                  placeholder="Contoh: Transfer sesuai total pesanan ke rekening BCA di atas. Simpan resi transfer dan unggah bukti pembayaran di aplikasi."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-hidden focus:border-sky-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end">
+                <button
+                  type="submit"
+                  disabled={bankSaveLoading}
+                  className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:bg-slate-300 text-white font-bold text-xs shadow-xs active:scale-95 transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>{bankSaveLoading ? 'Menyimpan...' : 'Simpan Pengaturan Bank'}</span>
+                </button>
+              </div>
+            </form>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Metode/Channel Pembayaran:</label>
-              <input
-                type="text"
-                value={settingsForm.payment_channel_name}
-                onChange={(e) =>
-                  setSettingsForm({ ...settingsForm, payment_channel_name: e.target.value })
+          {/* =====================================================================
+              B. PEMBAYARAN VIRTUAL ACCOUNT
+          ===================================================================== */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-2xs">
+            {/* Header & Status Indicator */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <span>B. Pembayaran Virtual Account</span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        settingsForm.va_active
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {settingsForm.va_active ? '● AKTIF DI CHECKOUT' : '○ NONAKTIF'}
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Pembayaran praktis dengan kode nomor Virtual Account
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Toggle Button */}
+              <button
+                type="button"
+                onClick={() =>
+                  setSettingsForm((prev) => ({ ...prev, va_active: !prev.va_active }))
                 }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 font-semibold"
-                placeholder="BCA / BRI / QRIS"
-              />
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto ${
+                  settingsForm.va_active
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                    : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
+                }`}
+              >
+                {settingsForm.va_active ? (
+                  <>
+                    <ToggleRight className="w-4 h-4 text-emerald-600" />
+                    <span>Status: Aktif</span>
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft className="w-4 h-4 text-slate-400" />
+                    <span>Status: Nonaktif</span>
+                  </>
+                )}
+              </button>
             </div>
 
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Nomor Rekening / Virtual Account:</label>
-              <input
-                type="text"
-                value={settingsForm.payment_account_number}
-                onChange={(e) =>
-                  setSettingsForm({ ...settingsForm, payment_account_number: e.target.value })
-                }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono font-bold"
-                placeholder="0281928371"
-              />
-            </div>
+            {/* Inline Feedback Banner */}
+            {vaSaveFeedback && (
+              <div
+                className={`p-3 rounded-2xl border flex items-center justify-between gap-2 text-xs animate-in fade-in ${
+                  vaSaveFeedback.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {vaSaveFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>{vaSaveFeedback.message}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setVaSaveFeedback(null)}
+                  className="text-slate-400 hover:text-slate-700"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Atas Nama Penerima:</label>
-              <input
-                type="text"
-                value={settingsForm.payment_recipient_name}
-                onChange={(e) =>
-                  setSettingsForm({ ...settingsForm, payment_recipient_name: e.target.value })
-                }
-                className="w-full px-3 py-2 rounded-xl border border-slate-200"
-                placeholder="PAYKAJASTIP OFFICIAL"
-              />
-            </div>
+            {/* VA Form Fields */}
+            <form onSubmit={handleSaveVA} className="space-y-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Nama Penyedia Virtual Account:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.va_provider || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, va_provider: e.target.value })
+                    }
+                    placeholder="Contoh: BCA Virtual Account / Mandiri VA"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-semibold focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
 
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">URL Gambar QRIS:</label>
-              <input
-                type="text"
-                value={settingsForm.payment_qr_url}
-                onChange={(e) => setSettingsForm({ ...settingsForm, payment_qr_url: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
-              />
-            </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Nomor Virtual Account:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.va_number || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, va_number: e.target.value })
+                    }
+                    placeholder="Contoh: 8271081254321098"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono font-bold focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
 
-            <div className="sm:col-span-2">
-              <label className="font-bold text-slate-700 block mb-1">Instruksi Pembayaran Manual:</label>
-              <textarea
-                rows={2}
-                value={settingsForm.payment_instructions}
-                onChange={(e) => setSettingsForm({ ...settingsForm, payment_instructions: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
-              />
-            </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Nama Penerima VA:</label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.va_recipient_name || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, va_recipient_name: e.target.value })
+                    }
+                    placeholder="Contoh: PAYKA JASTIP SINGKAWANG"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-semibold focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Instruksi Pembayaran Manual Virtual Account:
+                </label>
+                <textarea
+                  rows={2}
+                  value={settingsForm.va_instructions || ''}
+                  onChange={(e) =>
+                    setSettingsForm({ ...settingsForm, va_instructions: e.target.value })
+                  }
+                  placeholder="Contoh: Buka m-BCA > Transfer > BCA Virtual Account > Masukkan nomor VA > Konfirmasi & upload bukti pembayaran."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-hidden focus:border-sky-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end">
+                <button
+                  type="submit"
+                  disabled={vaSaveLoading}
+                  className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:bg-slate-300 text-white font-bold text-xs shadow-xs active:scale-95 transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>{vaSaveLoading ? 'Menyimpan...' : 'Simpan Pengaturan Virtual Account'}</span>
+                </button>
+              </div>
+            </form>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-800">Status Pembayaran Otomatis/Manual:</span>
-            <button
-              type="button"
-              onClick={() =>
-                setSettingsForm({
-                  ...settingsForm,
-                  is_payment_configured: !settingsForm.is_payment_configured,
-                })
-              }
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold ${
-                settingsForm.is_payment_configured
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-rose-100 text-rose-800'
-              }`}
-            >
-              {settingsForm.is_payment_configured ? 'AKTIF DI CHECKOUT' : 'NONAKTIF'}
-            </button>
+          {/* =====================================================================
+              C. PEMBAYARAN DANA
+          ===================================================================== */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-2xs">
+            {/* Header & Status Indicator */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center shrink-0">
+                  <Wallet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <span>C. Pembayaran DANA</span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        settingsForm.dana_active
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {settingsForm.dana_active ? '● AKTIF DI CHECKOUT' : '○ NONAKTIF'}
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Transfer saldo langsung ke nomor dompet digital DANA resmi
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Toggle Button */}
+              <button
+                type="button"
+                onClick={() =>
+                  setSettingsForm((prev) => ({ ...prev, dana_active: !prev.dana_active }))
+                }
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto ${
+                  settingsForm.dana_active
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                    : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
+                }`}
+              >
+                {settingsForm.dana_active ? (
+                  <>
+                    <ToggleRight className="w-4 h-4 text-emerald-600" />
+                    <span>Status: Aktif</span>
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft className="w-4 h-4 text-slate-400" />
+                    <span>Status: Nonaktif</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Inline Feedback Banner */}
+            {danaSaveFeedback && (
+              <div
+                className={`p-3 rounded-2xl border flex items-center justify-between gap-2 text-xs animate-in fade-in ${
+                  danaSaveFeedback.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {danaSaveFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>{danaSaveFeedback.message}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDanaSaveFeedback(null)}
+                  className="text-slate-400 hover:text-slate-700"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* DANA Form Fields */}
+            <form onSubmit={handleSaveDana} className="space-y-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Nomor DANA:</label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.dana_number || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, dana_number: e.target.value })
+                    }
+                    placeholder="Contoh: 081254321098"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono font-bold focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Nama Pemilik Akun DANA:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={settingsForm.dana_recipient_name || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, dana_recipient_name: e.target.value })
+                    }
+                    placeholder="Contoh: PAYKA JASTIP SINGKAWANG"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-semibold focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Instruksi Pembayaran Manual DANA:
+                </label>
+                <textarea
+                  rows={2}
+                  value={settingsForm.dana_instructions || ''}
+                  onChange={(e) =>
+                    setSettingsForm({ ...settingsForm, dana_instructions: e.target.value })
+                  }
+                  placeholder="Contoh: Buka aplikasi DANA > Kirim > Masukkan nomor DANA di atas > Tulis nomor pesanan pada catatan > Konfirmasi & upload screenshot bukti transfer."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-hidden focus:border-sky-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end">
+                <button
+                  type="submit"
+                  disabled={danaSaveLoading}
+                  className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:bg-slate-300 text-white font-bold text-xs shadow-xs active:scale-95 transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>{danaSaveLoading ? 'Menyimpan...' : 'Simpan Pengaturan DANA'}</span>
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
+
+          {/* =====================================================================
+              D. PEMBAYARAN QRIS
+          ===================================================================== */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-2xs">
+            {/* Header & Status Indicator */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <QrCode className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <span>D. Pembayaran QRIS</span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        settingsForm.qris_active
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {settingsForm.qris_active ? '● AKTIF DI CHECKOUT' : '○ NONAKTIF'}
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Scan kode QRIS resmi nasional untuk semua Mobile Banking &amp; E-Wallet
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Toggle Button */}
+              <button
+                type="button"
+                onClick={() =>
+                  setSettingsForm((prev) => ({ ...prev, qris_active: !prev.qris_active }))
+                }
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto ${
+                  settingsForm.qris_active
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                    : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
+                }`}
+              >
+                {settingsForm.qris_active ? (
+                  <>
+                    <ToggleRight className="w-4 h-4 text-emerald-600" />
+                    <span>Status: Aktif</span>
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft className="w-4 h-4 text-slate-400" />
+                    <span>Status: Nonaktif</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Inline Feedback Banner */}
+            {qrisSaveFeedback && (
+              <div
+                className={`p-3 rounded-2xl border flex items-center justify-between gap-2 text-xs animate-in fade-in ${
+                  qrisSaveFeedback.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {qrisSaveFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>{qrisSaveFeedback.message}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setQrisSaveFeedback(null)}
+                  className="text-slate-400 hover:text-slate-700"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* QRIS Form Fields */}
+            <form onSubmit={handleSaveQris} className="space-y-4 text-xs">
+              {/* Image Preview & Upload / Replace / Remove Buttons */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                <span className="font-bold text-slate-700 block text-xs">
+                  Pratinjau &amp; Upload Gambar QRIS:
+                </span>
+
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  {/* Image Preview Container */}
+                  <div className="w-44 h-44 rounded-2xl overflow-hidden border-2 border-slate-200 bg-white p-2 shadow-xs shrink-0 flex items-center justify-center">
+                    {settingsForm.qris_image_url ? (
+                      <img
+                        src={settingsForm.qris_image_url}
+                        alt="Preview QRIS"
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <div className="text-center p-3 space-y-1 text-slate-400">
+                        <QrCode className="w-10 h-10 mx-auto text-slate-300" />
+                        <span className="text-[11px] block">Belum ada gambar QRIS</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions for QRIS Image */}
+                  <div className="flex-1 space-y-2.5 w-full">
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      Unggah berkas foto QRIS (JPG, PNG) dari galeri Anda, atau masukkan tautan URL gambar langsung di bawah.
+                    </p>
+
+                    {/* Hidden file input */}
+                    <input
+                      ref={qrisFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleQrisFileChange}
+                      className="hidden"
+                    />
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => qrisFileInputRef.current?.click()}
+                        className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer transition"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{settingsForm.qris_image_url ? 'Ganti QRIS' : 'Upload Gambar QRIS'}</span>
+                      </button>
+
+                      {settingsForm.qris_image_url && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSettingsForm((prev) => ({ ...prev, qris_image_url: '' }));
+                            setQrisSaveFeedback({
+                              type: 'success',
+                              message: 'Gambar QRIS dihapus dari form. Klik "Simpan Pengaturan QRIS" untuk memperbarui.',
+                            });
+                          }}
+                          className="px-3.5 py-2 rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Hapus QRIS</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="pt-2">
+                      <label className="text-[11px] text-slate-600 font-semibold block mb-1">
+                        Atau Masukkan URL Gambar QRIS:
+                      </label>
+                      <input
+                        type="text"
+                        value={settingsForm.qris_image_url || ''}
+                        onChange={(e) =>
+                          setSettingsForm({ ...settingsForm, qris_image_url: e.target.value })
+                        }
+                        placeholder="https://domain.com/qris-payka.jpg"
+                        className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-mono focus:outline-hidden focus:border-sky-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Nama Merchant / Penerima QRIS:
+                  </label>
+                  <input
+                    type="text"
+                    value={settingsForm.qris_merchant_name || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, qris_merchant_name: e.target.value })
+                    }
+                    placeholder="Contoh: PAYKAJASTIP SINGKAWANG (QRIS RESMI)"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-semibold focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Instruksi Scan QRIS (Ditampilkan ke Pelanggan):
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={settingsForm.qris_instructions || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, qris_instructions: e.target.value })
+                    }
+                    placeholder="Contoh: Scan kode QRIS menggunakan GoPay, OVO, DANA, BCA Mobile, atau aplikasi e-wallet / mobile banking apa pun. Upload tangkapan layar bukti bayar."
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end">
+                <button
+                  type="submit"
+                  disabled={qrisSaveLoading}
+                  className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:bg-slate-300 text-white font-bold text-xs shadow-xs active:scale-95 transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>{qrisSaveLoading ? 'Menyimpan...' : 'Simpan Pengaturan QRIS'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* =====================================================================
+              E. BIAYA PENGANTARAN & KONFIGURASI SISTEM
+          ===================================================================== */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-2xs">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                    E. Tarif Kurir Payka &amp; Konfigurasi Sistem
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Tarif dasar pengiriman, jarak tempuh, dan biaya platform PAYKAJASTIP
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {ratesSaveFeedback && (
+              <div
+                className={`p-3 rounded-2xl border flex items-center justify-between gap-2 text-xs animate-in fade-in ${
+                  ratesSaveFeedback.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {ratesSaveFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>{ratesSaveFeedback.message}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRatesSaveFeedback(null)}
+                  className="text-slate-400 hover:text-slate-700"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveRatesAndSystem} className="space-y-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Biaya Ongkir Dasar (Rp):
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={settingsForm.base_delivery_fee ?? 10000}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        base_delivery_fee: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-bold focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Tarif Per Km (Rp/km):
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={settingsForm.per_km_fee ?? 3000}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        per_km_fee: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-bold focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    Biaya Layanan Aplikasi (Rp):
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={settingsForm.service_fee ?? 2000}
+                    onChange={(e) =>
+                      setSettingsForm({
+                        ...settingsForm,
+                        service_fee: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-bold focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Nama Aplikasi:</label>
+                  <input
+                    type="text"
+                    value={settingsForm.app_name || 'PAYKAJASTIP'}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, app_name: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 font-semibold focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Tagline:</label>
+                  <input
+                    type="text"
+                    value={settingsForm.tagline || ''}
+                    onChange={(e) =>
+                      setSettingsForm({ ...settingsForm, tagline: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:border-sky-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end">
+                <button
+                  type="submit"
+                  disabled={ratesSaveLoading}
+                  className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold text-xs shadow-xs active:scale-95 transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{ratesSaveLoading ? 'Menyimpan...' : 'Simpan Konfigurasi Tarif & Sistem'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* =========================================================================
