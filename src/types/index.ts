@@ -393,6 +393,17 @@ export interface AdminSettings {
   qris_merchant_name: string;
   qris_image_url: string;
   qris_instructions: string;
+
+  // E. Dedicated COD (Cash On Delivery) Settings
+  cod_active: boolean;
+  cod_instructions: string;
+
+  // F. Branding & Logo Settings
+  app_logo_url: string;
+  web_logo_url: string;
+
+  // G. Driver Dispatch Settings
+  auto_assign_driver: boolean;
 }
 
 export interface OsmPlace {

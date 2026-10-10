@@ -46,6 +46,11 @@ import {
   Building2,
   QrCode,
   ShieldCheck,
+  Banknote,
+  Layers,
+  Compass,
+  Image,
+  Bot,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -201,7 +206,15 @@ export const AdminSuitePage: React.FC = () => {
   const [assigningOrder, setAssigningOrder] = useState<string | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<string>(drivers[0]?.id || '');
 
-  // Admin Map Coordinator State
+  // Admin Map Coordinator & Yellow Draggable Pin State (Perintah 1)
+  const [storeSubTab, setStoreSubTab] = useState<'list' | 'map_add'>('list');
+  const [selectedDetailStore, setSelectedDetailStore] = useState<StoreType | null>(null);
+  const [confirmDeleteStore, setConfirmDeleteStore] = useState<StoreType | null>(null);
+  const [storeMapFeedback, setStoreMapFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
   const [selectedMapStoreId, setSelectedMapStoreId] = useState<string>(stores[0]?.id || '');
   const selectedMapStore = useMemo(
     () => stores.find((s) => s.id === selectedMapStoreId) || stores[0],
@@ -209,6 +222,29 @@ export const AdminSuitePage: React.FC = () => {
   );
   const [tempLat, setTempLat] = useState<number>(selectedMapStore ? selectedMapStore.latitude : 0.9056);
   const [tempLng, setTempLng] = useState<number>(selectedMapStore ? selectedMapStore.longitude : 108.9868);
+
+  // Logo & Branding Settings states (Perintah 3)
+  const [logoSaveLoading, setLogoSaveLoading] = useState(false);
+  const [logoSaveFeedback, setLogoSaveFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const logoFileInputRef = useRef<HTMLInputElement | null>(null);
+  const faviconFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // COD Settings states (Perintah 4)
+  const [codSaveLoading, setCodSaveLoading] = useState(false);
+  const [codSaveFeedback, setCodSaveFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  // Auto Driver Dispatch states (Perintah 5)
+  const [dispatchSaveLoading, setDispatchSaveLoading] = useState(false);
+  const [dispatchSaveFeedback, setDispatchSaveFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   // Settings form states
   const [settingsForm, setSettingsForm] = useState(adminSettings);
@@ -485,6 +521,145 @@ export const AdminSuitePage: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  // F. Save COD Payment Settings (Perintah 4)
+  const handleSaveCOD = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setCodSaveFeedback(null);
+    setCodSaveLoading(true);
+    try {
+      const res = await updateAdminSettings({
+        cod_active: settingsForm.cod_active,
+        cod_instructions: settingsForm.cod_instructions || '',
+      });
+      setCodSaveFeedback({
+        type: res.success ? 'success' : 'error',
+        message: res.message,
+      });
+    } catch (err: any) {
+      setCodSaveFeedback({
+        type: 'error',
+        message: `Gagal menyimpan pengaturan COD: ${err?.message || 'Error'}`,
+      });
+    } finally {
+      setCodSaveLoading(false);
+    }
+  };
+
+  // G. Save Logo & Branding Settings (Perintah 3)
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setLogoSaveFeedback({
+        type: 'error',
+        message: 'File logo harus berupa gambar (PNG, JPG, SVG, WebP).',
+      });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (ev.target?.result) {
+        setSettingsForm((prev) => ({
+          ...prev,
+          app_logo_url: ev.target!.result as string,
+        }));
+        setLogoSaveFeedback({
+          type: 'success',
+          message: 'Logo aplikasi berhasil dimuat ke form! Klik tombol "Simpan Pengaturan Logo" untuk menerapkan.',
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFaviconFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setLogoSaveFeedback({
+        type: 'error',
+        message: 'File favicon harus berupa gambar (ICO, PNG, SVG).',
+      });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (ev.target?.result) {
+        setSettingsForm((prev) => ({
+          ...prev,
+          web_logo_url: ev.target!.result as string,
+        }));
+        setLogoSaveFeedback({
+          type: 'success',
+          message: 'Logo website/favicon berhasil dimuat ke form! Klik tombol "Simpan Pengaturan Logo" untuk menerapkan.',
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveLogoSettings = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setLogoSaveFeedback(null);
+    setLogoSaveLoading(true);
+    try {
+      const res = await updateAdminSettings({
+        app_logo_url: settingsForm.app_logo_url?.trim() || '',
+        web_logo_url: settingsForm.web_logo_url?.trim() || '',
+      });
+      setLogoSaveFeedback({
+        type: res.success ? 'success' : 'error',
+        message: res.message,
+      });
+    } catch (err: any) {
+      setLogoSaveFeedback({
+        type: 'error',
+        message: `Gagal menyimpan pengaturan logo: ${err?.message || 'Error'}`,
+      });
+    } finally {
+      setLogoSaveLoading(false);
+    }
+  };
+
+  const handleResetLogoSettings = async () => {
+    setSettingsForm((prev) => ({
+      ...prev,
+      app_logo_url: '',
+      web_logo_url: '',
+    }));
+    await updateAdminSettings({
+      app_logo_url: '',
+      web_logo_url: '',
+    });
+    setLogoSaveFeedback({
+      type: 'success',
+      message: 'Logo aplikasi & website berhasil direset ke logo default!',
+    });
+  };
+
+  // H. Save Auto Driver Dispatch Settings (Perintah 5)
+  const handleSaveDispatch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setDispatchSaveFeedback(null);
+    setDispatchSaveLoading(true);
+    try {
+      const res = await updateAdminSettings({
+        auto_assign_driver: settingsForm.auto_assign_driver,
+      });
+      setDispatchSaveFeedback({
+        type: res.success ? 'success' : 'error',
+        message: res.message,
+      });
+    } catch (err: any) {
+      setDispatchSaveFeedback({
+        type: 'error',
+        message: `Gagal menyimpan pengaturan dispatch driver: ${err?.message || 'Error'}`,
+      });
+    } finally {
+      setDispatchSaveLoading(false);
+    }
+  };
+
   // E. Save Rates & System Config Handler
   const handleSaveRatesAndSystem = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -547,9 +722,9 @@ export const AdminSuitePage: React.FC = () => {
       badge: pendingPayments.length > 0 ? pendingPayments.length : null,
     },
     { id: 'orders', label: 'Orders', icon: ClipboardList, badge: orders.filter(o => o.status === 'MENUNGGU KONFIRMASI').length || null },
-    { id: 'stores', label: 'Stores', icon: Store },
+    { id: 'stores', label: 'Manajemen Toko', icon: Store },
     { id: 'products', label: 'Products', icon: Package },
-    { id: 'maps', label: 'Admin Maps', icon: MapPin },
+    { id: 'maps', label: 'Peta Toko (Titik Kuning)', icon: MapPin },
     { id: 'drivers', label: 'Drivers', icon: Bike },
     { id: 'customers', label: 'Customers', icon: Users },
     { id: 'jastip', label: 'Jastip', icon: ShoppingBag },
@@ -790,9 +965,17 @@ export const AdminSuitePage: React.FC = () => {
       {/* Admin Title Header */}
       <div className="bg-slate-900 text-white rounded-3xl p-5 sm:p-6 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-slate-800">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-600 to-rose-400 flex items-center justify-center font-bold text-white shadow-lg shrink-0">
-            <Shield className="w-6 h-6" />
-          </div>
+          {adminSettings.app_logo_url ? (
+            <img
+              src={adminSettings.app_logo_url}
+              alt={adminSettings.app_name || 'Logo'}
+              className="w-12 h-12 rounded-2xl object-cover bg-white p-1 border border-slate-700 shadow-lg shrink-0"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-600 to-rose-400 flex items-center justify-center font-bold text-white shadow-lg shrink-0">
+              <Shield className="w-6 h-6" />
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-black tracking-tight">Super Admin PAYKAJASTIP</h1>
@@ -1253,9 +1436,9 @@ export const AdminSuitePage: React.FC = () => {
                   {/* Order Items Preview */}
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-1">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                      Rincian Produk ({ord.items.length} item):
+                      Rincian Produk ({ord.items ? ord.items.length : 0} item):
                     </span>
-                    {ord.items.map((item, idx) => (
+                    {(ord.items || []).map((item, idx) => (
                       <div key={idx} className="flex justify-between text-[11px] text-slate-700">
                         <span>
                           {item.quantity}x {item.product_name}
@@ -1317,162 +1500,620 @@ export const AdminSuitePage: React.FC = () => {
       )}
 
       {/* =========================================================================
-          TAB 4: STORES DIRECTORY & MANAGEMENT
+          TAB 4: MANAJEMEN TOKO & PETA ADMIN (TITIK PENANDA KUNING - PERINTAH 1)
       ========================================================================= */}
       {activeAdminTab === 'stores' && (
-        <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row gap-2 sm:items-center justify-between">
-            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-              Katalog Toko ({filteredStores.length})
-            </h3>
-
-            <div className="flex items-center gap-2 flex-wrap">
-              <input
-                type="text"
-                placeholder="Cari toko..."
-                value={storeSearchQuery}
-                onChange={(e) => setStoreSearchQuery(e.target.value)}
-                className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white"
-              />
-
-              <select
-                value={storeDistrictFilter}
-                onChange={(e) => setStoreDistrictFilter(e.target.value)}
-                className="px-2 py-1.5 text-xs rounded-xl border border-slate-200 bg-white font-medium"
+        <div className="space-y-4">
+          {/* Sub-Tabs Switcher for Stores */}
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setStoreSubTab('list')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  storeSubTab === 'list'
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
               >
-                <option value="all">Semua Kecamatan</option>
-                <option value="Singkawang Barat">Singkawang Barat</option>
-                <option value="Singkawang Tengah">Singkawang Tengah</option>
-                <option value="Singkawang Timur">Singkawang Timur</option>
-                <option value="Singkawang Utara">Singkawang Utara</option>
-                <option value="Singkawang Selatan">Singkawang Selatan</option>
-                <option value="Bengkayang">Bengkayang</option>
-              </select>
+                <Store className="w-3.5 h-3.5" />
+                <span>Daftar &amp; Katalog Toko ({filteredStores.length})</span>
+              </button>
 
               <button
                 type="button"
-                onClick={() => setShowAddStoreModal(true)}
-                className="px-3.5 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold flex items-center gap-1 shadow-xs"
+                onClick={() => setStoreSubTab('map_add')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  storeSubTab === 'map_add'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs ring-2 ring-amber-300'
+                    : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
+                }`}
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Tambah Toko</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block border border-white"></span>
+                <span>Peta Interaktif &amp; Tambah Toko (Titik Kuning)</span>
               </button>
             </div>
+
+            {storeSubTab === 'list' && (
+              <button
+                type="button"
+                onClick={() => setStoreSubTab('map_add')}
+                className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-extrabold flex items-center gap-1.5 shadow-xs transition active:scale-95 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Tambah Toko via Titik Kuning</span>
+              </button>
+            )}
           </div>
 
-          <div className="space-y-2">
-            {filteredStores.map((st) => {
-              const storeProductsCount = products.filter((p) => p.store_id === st.id).length;
-              return (
-                <div
-                  key={st.id}
-                  className="bg-white p-4 rounded-3xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-3 shadow-2xs hover:border-slate-300 transition"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <img
-                      src={st.logo_url}
-                      alt={st.name}
-                      className="w-12 h-12 rounded-2xl object-cover border border-slate-100 shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <strong className="text-slate-900 text-sm font-bold truncate">{st.name}</strong>
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700">
-                          {st.category}
-                        </span>
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
-                          {storeProductsCount} Produk
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-slate-500 block truncate mt-0.5">
-                        {st.address} • {st.district}
-                      </span>
-                      <span className="text-[10px] text-slate-400 block mt-0.5">
-                        Buka: {st.opening_hours} • WA: {st.whatsapp}
-                      </span>
-                    </div>
+          {/* Feedback banner for store map action */}
+          {storeMapFeedback && (
+            <div
+              className={`p-3.5 rounded-2xl border flex items-center justify-between gap-2 text-xs animate-in fade-in ${
+                storeMapFeedback.type === 'success'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : 'bg-rose-50 border-rose-200 text-rose-900'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {storeMapFeedback.type === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                )}
+                <span>{storeMapFeedback.message}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStoreMapFeedback(null)}
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* ===================================================================
+              SUB-TAB 1: PETA INTERAKTIF & TAMBAH TOKO LANGSUNG (TITIK KUNING)
+          =================================================================== */}
+          {storeSubTab === 'map_add' && (
+            <div className="space-y-4">
+              {/* Info banner */}
+              <div className="bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 p-4 sm:p-5 rounded-3xl shadow-md space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-slate-950 text-amber-400 flex items-center justify-center font-bold">
+                    📍
+                  </div>
+                  <h3 className="text-sm font-black uppercase tracking-wide">
+                    Penambahan &amp; Pengelolaan Toko Langsung pada Peta (Titik Kuning)
+                  </h3>
+                </div>
+                <p className="text-xs text-slate-900 font-medium leading-relaxed max-w-3xl">
+                  Ketuk lokasi yang diinginkan pada peta atau geser penanda kuning untuk menentukan posisi merchant secara akurat di Kota Singkawang.
+                  Koordinat latitude &amp; longitude akan tersinkronisasi otomatis sebelum Anda menyimpan toko.
+                </p>
+              </div>
+
+              {/* Coordinates Bar & Mode Selector */}
+              <div className="bg-white p-4 rounded-3xl border border-slate-200 space-y-3 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-3 font-mono text-xs text-slate-700 flex-wrap">
+                    <span className="px-3 py-1 bg-amber-100 text-amber-900 rounded-xl font-bold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                      <span>TITIK KUNING TERKINI:</span>
+                    </span>
+                    <span className="bg-slate-100 px-2.5 py-1 rounded-xl">
+                      Lat: <strong>{tempLat.toFixed(6)}</strong>
+                    </span>
+                    <span className="bg-slate-100 px-2.5 py-1 rounded-xl">
+                      Lng: <strong>{tempLng.toFixed(6)}</strong>
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5 flex-wrap self-end sm:self-center">
-                    {/* Edit Toko & Katalog Profil */}
-                    <button
-                      type="button"
-                      onClick={() => handleOpenEditStore(st)}
-                      className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 hover:bg-amber-100 text-[10px] font-bold flex items-center gap-1 border border-amber-200 transition active:scale-95"
-                      title="Edit katalog dan data toko"
+                  {/* Move marker to existing store coordinates */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-slate-500 font-semibold">Atur Toko Lain:</span>
+                    <select
+                      value={selectedMapStoreId}
+                      onChange={(e) => {
+                        setSelectedMapStoreId(e.target.value);
+                        const st = stores.find((s) => s.id === e.target.value);
+                        if (st) {
+                          setTempLat(st.latitude);
+                          setTempLng(st.longitude);
+                          setNewStoreForm((prev) => ({
+                            ...prev,
+                            address: st.address,
+                            district: st.district,
+                            latitude: st.latitude,
+                            longitude: st.longitude,
+                          }));
+                        }
+                      }}
+                      className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white"
                     >
-                      <Edit2 className="w-3 h-3 text-amber-600" />
-                      <span>Edit Toko</span>
-                    </button>
+                      {stores.map((st) => (
+                        <option key={st.id} value={st.id}>
+                          {st.name} ({st.district})
+                        </option>
+                      ))}
+                    </select>
 
-                    {/* Quick View Products in Catalog */}
                     <button
                       type="button"
                       onClick={() => {
-                        setProductStoreFilter(st.id);
-                        setActiveAdminTab('products');
+                        if (!selectedMapStore) return;
+                        updateStore(selectedMapStore.id, {
+                          latitude: tempLat,
+                          longitude: tempLng,
+                        });
+                        setStoreMapFeedback({
+                          type: 'success',
+                          message: `Koordinat ${selectedMapStore.name} berhasil diperbarui ke [${tempLat.toFixed(5)}, ${tempLng.toFixed(5)}]!`,
+                        });
                       }}
-                      className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-800 hover:bg-indigo-100 text-[10px] font-bold flex items-center gap-1 border border-indigo-200 transition active:scale-95"
-                      title="Lihat katalog produk toko ini"
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs active:scale-95 transition cursor-pointer"
                     >
-                      <Package className="w-3 h-3 text-indigo-600" />
-                      <span>Katalog ({storeProductsCount})</span>
-                    </button>
-
-                    {/* Quick Edit Map */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedMapStoreId(st.id);
-                        setTempLat(st.latitude);
-                        setTempLng(st.longitude);
-                        setActiveAdminTab('maps');
-                      }}
-                      className="px-2.5 py-1 rounded-xl bg-sky-50 text-sky-700 hover:bg-sky-100 text-[10px] font-bold flex items-center gap-1 border border-sky-200 transition active:scale-95"
-                      title="Edit koordinat titik di peta"
-                    >
-                      <MapPin className="w-3 h-3" />
-                      <span>Titik Peta</span>
-                    </button>
-
-                    {/* Open / Close Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => updateStore(st.id, { is_open: !st.is_open })}
-                      className={`px-2 py-1 rounded-xl text-[10px] font-bold transition active:scale-95 ${
-                        st.is_open ? 'bg-emerald-50 text-emerald-800' : 'bg-slate-100 text-slate-500'
-                      }`}
-                    >
-                      {st.is_open ? 'Toko Buka' : 'Tutup'}
-                    </button>
-
-                    {/* Active Toggle */}
-                    <button
-                      type="button"
-                      onClick={() => updateStore(st.id, { is_active: !st.is_active })}
-                      className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition active:scale-95 ${
-                        st.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
-                      }`}
-                    >
-                      {st.is_active ? 'Aktif' : 'Nonaktif'}
-                    </button>
-
-                    {/* Delete Store */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (confirm(`Hapus toko ${st.name} beserta produknya?`)) deleteStore(st.id);
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition active:scale-95"
-                      title="Hapus toko"
-                    >
-                      <Trash2 className="w-4 h-4" />
+                      Update Koordinat Toko Ini
                     </button>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* Leaflet Map with Admin Draggable Marker */}
+                <div className="h-[380px] sm:h-[450px] rounded-2xl overflow-hidden border border-slate-200 shadow-inner relative">
+                  <SingkawangMap
+                    adminMode={true}
+                    initialLat={tempLat}
+                    initialLng={tempLng}
+                    onCoordinateChange={(lat, lng) => {
+                      setTempLat(lat);
+                      setTempLng(lng);
+                      setNewStoreForm((prev) => ({
+                        ...prev,
+                        latitude: lat,
+                        longitude: lng,
+                      }));
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Form Tambah Toko Baru (Persisten ke Database) */}
+              <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-2xs">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold">
+                      <Plus className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                        Formulir Tambah Toko Baru dari Titik Peta
+                      </h4>
+                      <p className="text-[11px] text-slate-500">
+                        Data toko akan tersimpan ke database utama dan langsung aktif pada katalog &amp; jastip.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!newStoreForm.name.trim() || !newStoreForm.address.trim()) {
+                      alert('Nama toko dan alamat lengkap wajib diisi.');
+                      return;
+                    }
+                    addStore({
+                      merchant_id: 'merchant-admin',
+                      name: newStoreForm.name.trim(),
+                      slug: newStoreForm.name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+                      logo_url:
+                        newStoreForm.logo_url ||
+                        'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=300&q=80',
+                      banner_url:
+                        newStoreForm.banner_url ||
+                        'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80',
+                      category: newStoreForm.category,
+                      description: newStoreForm.description || '',
+                      address: newStoreForm.address.trim(),
+                      latitude: tempLat,
+                      longitude: tempLng,
+                      district: newStoreForm.district,
+                      whatsapp: newStoreForm.whatsapp.trim(),
+                      opening_hours: newStoreForm.opening_hours || '08.00 - 21.00 WIB',
+                      is_open: true,
+                      rating: 5.0,
+                      review_count: 0,
+                      store_type: newStoreForm.store_type,
+                      location_status: 'verified',
+                      is_active: true,
+                    });
+                    setStoreMapFeedback({
+                      type: 'success',
+                      message: `Toko "${newStoreForm.name}" berhasil ditambahkan ke database dengan koordinat [${tempLat.toFixed(5)}, ${tempLng.toFixed(5)}]!`,
+                    });
+                    setNewStoreForm({
+                      name: '',
+                      category: 'Makanan',
+                      store_type: 'umkm',
+                      district: 'Singkawang Barat',
+                      address: '',
+                      whatsapp: '081254321098',
+                      opening_hours: '08.00 - 21.00 WIB',
+                      description: '',
+                      logo_url: '',
+                      banner_url: '',
+                      latitude: tempLat,
+                      longitude: tempLng,
+                    });
+                  }}
+                  className="space-y-3.5 text-xs"
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">
+                        Nama Toko / Merchant *:
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newStoreForm.name}
+                        onChange={(e) =>
+                          setNewStoreForm({ ...newStoreForm, name: e.target.value })
+                        }
+                        placeholder="Contoh: Choipan Thien Thien"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 font-semibold focus:outline-hidden focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">
+                        Kategori Toko *:
+                      </label>
+                      <select
+                        value={newStoreForm.category}
+                        onChange={(e) =>
+                          setNewStoreForm({ ...newStoreForm, category: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium focus:outline-hidden focus:border-amber-500"
+                      >
+                        <option value="Makanan">Makanan</option>
+                        <option value="Minuman">Minuman</option>
+                        <option value="Oleh-oleh">Oleh-oleh Khas Singkawang</option>
+                        <option value="UMKM">UMKM &amp; Home Industry</option>
+                        <option value="Sembako">Sembako &amp; Pasar Tradisional</option>
+                        <option value="Fashion">Fashion &amp; Aksesoris</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">
+                        Kecamatan di Singkawang *:
+                      </label>
+                      <select
+                        value={newStoreForm.district}
+                        onChange={(e) =>
+                          setNewStoreForm({ ...newStoreForm, district: e.target.value })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium focus:outline-hidden focus:border-amber-500"
+                      >
+                        <option value="Singkawang Barat">Singkawang Barat</option>
+                        <option value="Singkawang Tengah">Singkawang Tengah</option>
+                        <option value="Singkawang Timur">Singkawang Timur</option>
+                        <option value="Singkawang Utara">Singkawang Utara</option>
+                        <option value="Singkawang Selatan">Singkawang Selatan</option>
+                        <option value="Bengkayang">Bengkayang</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">
+                        Alamat Lengkap Toko *:
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newStoreForm.address}
+                        onChange={(e) =>
+                          setNewStoreForm({ ...newStoreForm, address: e.target.value })
+                        }
+                        placeholder="Jl. Merdeka No. 12, Melayu, Singkawang"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium focus:outline-hidden focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Readonly Latitude & Longitude from Yellow Pin */}
+                  <div className="grid grid-cols-2 gap-3 p-3 bg-amber-50/60 rounded-2xl border border-amber-200 font-mono">
+                    <div>
+                      <label className="text-[10px] font-bold text-amber-900 block mb-0.5">
+                        Latitude (Otomatis dari Titik Kuning):
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        readOnly
+                        value={tempLat}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-amber-300 bg-white font-bold text-amber-950"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-amber-900 block mb-0.5">
+                        Longitude (Otomatis dari Titik Kuning):
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        readOnly
+                        value={tempLng}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-amber-300 bg-white font-bold text-amber-950"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">
+                        No WhatsApp Toko *:
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newStoreForm.whatsapp}
+                        onChange={(e) =>
+                          setNewStoreForm({ ...newStoreForm, whatsapp: e.target.value })
+                        }
+                        placeholder="081254321098"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium focus:outline-hidden focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">
+                        Jam Operasional Toko:
+                      </label>
+                      <input
+                        type="text"
+                        value={newStoreForm.opening_hours}
+                        onChange={(e) =>
+                          setNewStoreForm({ ...newStoreForm, opening_hours: e.target.value })
+                        }
+                        placeholder="08.00 - 21.00 WIB"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium focus:outline-hidden focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">
+                        URL Foto / Logo Toko (Opsional):
+                      </label>
+                      <input
+                        type="text"
+                        value={newStoreForm.logo_url}
+                        onChange={(e) =>
+                          setNewStoreForm({ ...newStoreForm, logo_url: e.target.value })
+                        }
+                        placeholder="https://.../logo.jpg"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono focus:outline-hidden focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">
+                        URL Banner Toko (Opsional):
+                      </label>
+                      <input
+                        type="text"
+                        value={newStoreForm.banner_url}
+                        onChange={(e) =>
+                          setNewStoreForm({ ...newStoreForm, banner_url: e.target.value })
+                        }
+                        placeholder="https://.../banner.jpg"
+                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono focus:outline-hidden focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      Deskripsi Toko (Opsional):
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={newStoreForm.description}
+                      onChange={(e) =>
+                        setNewStoreForm({ ...newStoreForm, description: e.target.value })
+                      }
+                      placeholder="Pusat oleh-oleh dan kuliner khas Singkawang..."
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-5 py-3 rounded-2xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/25 active:scale-95 transition flex items-center gap-2 cursor-pointer"
+                    >
+                      <Check className="w-4 h-4 stroke-[3]" />
+                      <span>SIMPAN TOKO BARU KE DATABASE</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ===================================================================
+              SUB-TAB 2: DAFTAR & KATALOG TOKO LENGKAP
+          =================================================================== */}
+          {storeSubTab === 'list' && (
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  Katalog Toko Terdaftar ({filteredStores.length})
+                </h3>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="text"
+                    placeholder="Cari toko atau alamat..."
+                    value={storeSearchQuery}
+                    onChange={(e) => setStoreSearchQuery(e.target.value)}
+                    className="px-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white"
+                  />
+
+                  <select
+                    value={storeDistrictFilter}
+                    onChange={(e) => setStoreDistrictFilter(e.target.value)}
+                    className="px-2 py-1.5 text-xs rounded-xl border border-slate-200 bg-white font-medium"
+                  >
+                    <option value="all">Semua Kecamatan</option>
+                    <option value="Singkawang Barat">Singkawang Barat</option>
+                    <option value="Singkawang Tengah">Singkawang Tengah</option>
+                    <option value="Singkawang Timur">Singkawang Timur</option>
+                    <option value="Singkawang Utara">Singkawang Utara</option>
+                    <option value="Singkawang Selatan">Singkawang Selatan</option>
+                    <option value="Bengkayang">Bengkayang</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {filteredStores.map((st) => {
+                  const storeProductsCount = products.filter((p) => p.store_id === st.id).length;
+                  return (
+                    <div
+                      key={st.id}
+                      className="bg-white p-4 rounded-3xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-3 shadow-2xs hover:border-slate-300 transition"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img
+                          src={st.logo_url}
+                          alt={st.name}
+                          className="w-12 h-12 rounded-2xl object-cover border border-slate-100 shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <strong className="text-slate-900 text-sm font-bold truncate">
+                              {st.name}
+                            </strong>
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700">
+                              {st.category}
+                            </span>
+                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-100">
+                              {storeProductsCount} Produk
+                            </span>
+                            <span
+                              className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded ${
+                                st.is_active
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-rose-100 text-rose-800'
+                              }`}
+                            >
+                              {st.is_active ? 'AKTIF' : 'NONAKTIF'}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-500 block truncate mt-0.5">
+                            {st.address} • {st.district}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block mt-0.5">
+                            Buka: {st.opening_hours} • WA: {st.whatsapp} • [{st.latitude.toFixed(4)}, {st.longitude.toFixed(4)}]
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap self-end sm:self-center">
+                        {/* Detail Toko */}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDetailStore(st)}
+                          className="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 text-[10px] font-bold flex items-center gap-1 transition active:scale-95 cursor-pointer"
+                          title="Lihat detail lengkap toko"
+                        >
+                          <Eye className="w-3 h-3 text-slate-600" />
+                          <span>Detail</span>
+                        </button>
+
+                        {/* Edit Toko */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditStore(st)}
+                          className="px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 hover:bg-amber-100 text-[10px] font-bold flex items-center gap-1 border border-amber-200 transition active:scale-95 cursor-pointer"
+                          title="Edit katalog dan data toko"
+                        >
+                          <Edit2 className="w-3 h-3 text-amber-600" />
+                          <span>Edit</span>
+                        </button>
+
+                        {/* Quick View Products in Catalog */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProductStoreFilter(st.id);
+                            setActiveAdminTab('products');
+                          }}
+                          className="px-2.5 py-1 rounded-xl bg-indigo-50 text-indigo-800 hover:bg-indigo-100 text-[10px] font-bold flex items-center gap-1 border border-indigo-200 transition active:scale-95 cursor-pointer"
+                          title="Lihat produk toko ini"
+                        >
+                          <Package className="w-3 h-3 text-indigo-600" />
+                          <span>Produk ({storeProductsCount})</span>
+                        </button>
+
+                        {/* Atur Titik di Peta (Mengarahkan titik kuning ke koordinat toko) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedMapStoreId(st.id);
+                            setTempLat(st.latitude);
+                            setTempLng(st.longitude);
+                            setStoreSubTab('map_add');
+                          }}
+                          className="px-2.5 py-1 rounded-xl bg-sky-50 text-sky-700 hover:bg-sky-100 text-[10px] font-bold flex items-center gap-1 border border-sky-200 transition active:scale-95 cursor-pointer"
+                          title="Ubah titik koordinat di peta"
+                        >
+                          <MapPin className="w-3 h-3 text-sky-600" />
+                          <span>Titik Peta</span>
+                        </button>
+
+                        {/* Toggle Aktif / Nonaktif */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateStore(st.id, { is_active: !st.is_active });
+                            setStoreMapFeedback({
+                              type: 'success',
+                              message: `Status toko "${st.name}" berhasil diubah menjadi ${!st.is_active ? 'Aktif' : 'Nonaktif'}!`,
+                            });
+                          }}
+                          className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition active:scale-95 cursor-pointer ${
+                            st.is_active
+                              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+                          }`}
+                        >
+                          {st.is_active ? 'Aktif' : 'Nonaktif'}
+                        </button>
+
+                        {/* Delete Store */}
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteStore(st)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition active:scale-95 cursor-pointer"
+                          title="Hapus toko dengan konfirmasi"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -3307,7 +3948,467 @@ INSERT INTO public.admin_settings (id, whatsapp_admin) VALUES (1, '081254321098'
           </div>
 
           {/* =====================================================================
-              E. BIAYA PENGANTARAN & KONFIGURASI SISTEM
+              E. PEMBAYARAN COD (BAYAR DI TEMPAT) - PERINTAH 4
+          ===================================================================== */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-2xs">
+            {/* Header & Status Indicator */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Banknote className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <span>E. Pembayaran COD (Cash On Delivery)</span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        settingsForm.cod_active
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {settingsForm.cod_active ? '● AKTIF DI CHECKOUT' : '○ NONAKTIF'}
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Pelanggan membayar uang tunai langsung ke Driver / Kurir saat pesanan jastip tiba di lokasi
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Toggle Button */}
+              <button
+                type="button"
+                onClick={() =>
+                  setSettingsForm((prev) => ({ ...prev, cod_active: !prev.cod_active }))
+                }
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto ${
+                  settingsForm.cod_active
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                    : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
+                }`}
+              >
+                {settingsForm.cod_active ? (
+                  <>
+                    <ToggleRight className="w-4 h-4 text-emerald-600" />
+                    <span>Status: Aktif</span>
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft className="w-4 h-4 text-slate-400" />
+                    <span>Status: Nonaktif</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Inline Feedback Banner */}
+            {codSaveFeedback && (
+              <div
+                className={`p-3 rounded-2xl border flex items-center justify-between gap-2 text-xs animate-in fade-in ${
+                  codSaveFeedback.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {codSaveFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>{codSaveFeedback.message}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCodSaveFeedback(null)}
+                  className="text-slate-400 hover:text-slate-700"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* COD Form */}
+            <form onSubmit={handleSaveCOD} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  Instruksi &amp; Panduan COD (Ditampilkan di Checkout Pelanggan &amp; Konfirmasi):
+                </label>
+                <textarea
+                  rows={3}
+                  value={settingsForm.cod_instructions || ''}
+                  onChange={(e) =>
+                    setSettingsForm({ ...settingsForm, cod_instructions: e.target.value })
+                  }
+                  placeholder="Contoh: Bayar tunai kepada driver saat pesanan tiba di lokasi Anda. Mohon siapkan uang pas sesuai total tagihan agar transaksi cepat dan lancar."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-hidden focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="p-3 bg-emerald-50/70 rounded-2xl border border-emerald-200/80 text-emerald-950 text-[11px] space-y-1">
+                <span className="font-bold block">💡 Integrasi Otomatis COD:</span>
+                <p>
+                  Jika status aktif, opsi pembayaran COD akan otomatis muncul di <strong>Checkout Produk</strong> dan <strong>Pemesanan Jastip Sekarang</strong>. Driver yang ditugaskan otomatis akan menerima catatan tagihan tunai untuk dibayarkan oleh pemesan saat barang sampai.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end">
+                <button
+                  type="submit"
+                  disabled={codSaveLoading}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold text-xs shadow-xs active:scale-95 transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>{codSaveLoading ? 'Menyimpan...' : 'Simpan Pengaturan COD'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* =====================================================================
+              F. PENGATURAN LOGO APLIKASI & LOGO WEBSITE - PERINTAH 3
+          ===================================================================== */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-2xs">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                  <Image className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                    F. Penggantian Logo Aplikasi &amp; Logo Website
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Sesuaikan identitas visual PaykaJastip di navbar aplikasi, tab browser (favicon), dan header admin
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Inline Feedback Banner */}
+            {logoSaveFeedback && (
+              <div
+                className={`p-3 rounded-2xl border flex items-center justify-between gap-2 text-xs animate-in fade-in ${
+                  logoSaveFeedback.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {logoSaveFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>{logoSaveFeedback.message}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setLogoSaveFeedback(null)}
+                  className="text-slate-400 hover:text-slate-700"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveLogoSettings} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 1. App Logo (Header Navbar & Splash) */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800 text-xs">
+                      1. Logo Aplikasi (Header &amp; Navbar)
+                    </span>
+                    <span className="text-[10px] text-slate-400">PNG / SVG / JPG</span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="w-16 h-16 rounded-2xl border-2 border-slate-200 bg-white p-1.5 shadow-2xs flex items-center justify-center shrink-0 overflow-hidden">
+                      {settingsForm.app_logo_url ? (
+                        <img
+                          src={settingsForm.app_logo_url}
+                          alt="App Logo Preview"
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-sky-600 text-white flex items-center justify-center font-black text-xs">
+                          PJ
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 space-y-1.5">
+                      <input
+                        ref={logoFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleLogoFileChange}
+                        className="hidden"
+                      />
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => logoFileInputRef.current?.click()}
+                          className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                        >
+                          <Upload className="w-3 h-3" />
+                          <span>{settingsForm.app_logo_url ? 'Ganti File' : 'Upload File'}</span>
+                        </button>
+                        {settingsForm.app_logo_url && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSettingsForm((prev) => ({ ...prev, app_logo_url: '' }))
+                            }
+                            className="px-2.5 py-1.5 rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50 text-[11px] font-bold cursor-pointer"
+                          >
+                            Hapus
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-500">
+                        Muncul di pojok kiri atas aplikasi pelanggan &amp; sidebar admin.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-500 font-semibold block mb-1">
+                      Atau Masukkan URL Gambar Logo Aplikasi:
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsForm.app_logo_url || ''}
+                      onChange={(e) =>
+                        setSettingsForm({ ...settingsForm, app_logo_url: e.target.value })
+                      }
+                      placeholder="https://domain.com/app-logo.png"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-mono focus:outline-hidden focus:border-indigo-500 bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Web Logo / Favicon */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-800 text-xs">
+                      2. Logo Website / Favicon Browser
+                    </span>
+                    <span className="text-[10px] text-slate-400">ICO / PNG / SVG</span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="w-16 h-16 rounded-2xl border-2 border-slate-200 bg-white p-1.5 shadow-2xs flex items-center justify-center shrink-0 overflow-hidden">
+                      {settingsForm.web_logo_url || settingsForm.app_logo_url ? (
+                        <img
+                          src={settingsForm.web_logo_url || settingsForm.app_logo_url}
+                          alt="Web Logo Favicon Preview"
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-slate-800 text-white flex items-center justify-center font-black text-xs">
+                          🌐
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 space-y-1.5">
+                      <input
+                        ref={faviconFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFaviconFileChange}
+                        className="hidden"
+                      />
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => faviconFileInputRef.current?.click()}
+                          className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                        >
+                          <Upload className="w-3 h-3" />
+                          <span>{settingsForm.web_logo_url ? 'Ganti File' : 'Upload File'}</span>
+                        </button>
+                        {settingsForm.web_logo_url && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSettingsForm((prev) => ({ ...prev, web_logo_url: '' }))
+                            }
+                            className="px-2.5 py-1.5 rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50 text-[11px] font-bold cursor-pointer"
+                          >
+                            Hapus
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-500">
+                        Ditampilkan pada favicon tab peramban web dan meta preview.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-slate-500 font-semibold block mb-1">
+                      Atau Masukkan URL Favicon / Web Logo:
+                    </label>
+                    <input
+                      type="text"
+                      value={settingsForm.web_logo_url || ''}
+                      onChange={(e) =>
+                        setSettingsForm({ ...settingsForm, web_logo_url: e.target.value })
+                      }
+                      placeholder="https://domain.com/favicon.png"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-mono focus:outline-hidden focus:border-indigo-500 bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetLogoSettings}
+                  className="px-3.5 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 font-bold text-xs flex items-center gap-1 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset ke Logo Standar</span>
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={logoSaveLoading}
+                  className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold text-xs shadow-xs active:scale-95 transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>{logoSaveLoading ? 'Menyimpan...' : 'Simpan Pengaturan Logo'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* =====================================================================
+              G. PENCARIAN & PENUGASAN DRIVER OTOMATIS - PERINTAH 5
+          ===================================================================== */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-2xs">
+            {/* Header & Status Indicator */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-cyan-100 text-cyan-700 flex items-center justify-center shrink-0">
+                  <Bot className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <span>G. Auto-Dispatch Driver Terdekat</span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        settingsForm.auto_assign_driver !== false
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-slate-100 text-slate-500'
+                      }`}
+                    >
+                      {settingsForm.auto_assign_driver !== false ? '● DISPATCH AKTIF' : '○ MANUAL (TUNGGU ADMIN)'}
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Sistem otomatis mencari dan menugaskan driver terdekat tanpa menunggu verifikasi manual admin
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Toggle Button */}
+              <button
+                type="button"
+                onClick={() =>
+                  setSettingsForm((prev) => ({
+                    ...prev,
+                    auto_assign_driver: prev.auto_assign_driver === false ? true : false,
+                  }))
+                }
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer self-start sm:self-auto ${
+                  settingsForm.auto_assign_driver !== false
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                    : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
+                }`}
+              >
+                {settingsForm.auto_assign_driver !== false ? (
+                  <>
+                    <ToggleRight className="w-4 h-4 text-emerald-600" />
+                    <span>Auto-Dispatch: Aktif</span>
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft className="w-4 h-4 text-slate-400" />
+                    <span>Auto-Dispatch: Nonaktif</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Inline Feedback Banner */}
+            {dispatchSaveFeedback && (
+              <div
+                className={`p-3 rounded-2xl border flex items-center justify-between gap-2 text-xs animate-in fade-in ${
+                  dispatchSaveFeedback.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {dispatchSaveFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>{dispatchSaveFeedback.message}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDispatchSaveFeedback(null)}
+                  className="text-slate-400 hover:text-slate-700"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Dispatch details & save */}
+            <form onSubmit={handleSaveDispatch} className="space-y-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Radius Pencarian:</span>
+                  <span className="text-sm font-extrabold text-slate-800">Maks. 25 km</span>
+                  <p className="text-[10px] text-slate-400">Seluruh area Singkawang &amp; sekitarnya</p>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Algoritma Penugasan:</span>
+                  <span className="text-sm font-extrabold text-cyan-800">Jarak Terdekat (Haversine)</span>
+                  <p className="text-[10px] text-slate-400">Memilih driver online dengan km terendah</p>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                  <span className="text-[10px] text-slate-500 font-bold uppercase block">Notifikasi Real-time:</span>
+                  <span className="text-sm font-extrabold text-emerald-700">Admin + Driver + User</span>
+                  <p className="text-[10px] text-slate-400">Terkirim instan saat order dibuat</p>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end">
+                <button
+                  type="submit"
+                  disabled={dispatchSaveLoading}
+                  className="px-4 py-2.5 rounded-xl bg-cyan-700 hover:bg-cyan-800 disabled:bg-slate-300 text-white font-bold text-xs shadow-xs active:scale-95 transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>{dispatchSaveLoading ? 'Menyimpan...' : 'Simpan Pengaturan Auto-Dispatch'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* =====================================================================
+              H. BIAYA PENGANTARAN & KONFIGURASI SISTEM
           ===================================================================== */}
           <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-4 shadow-2xs">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">

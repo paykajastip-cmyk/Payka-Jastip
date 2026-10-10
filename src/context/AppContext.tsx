@@ -36,7 +36,7 @@ import {
   INITIAL_AREAS,
   INITIAL_PROMOS,
 } from '../data/initialData';
-import { calculateDeliveryFee } from '../utils/helpers';
+import { calculateDeliveryFee, calculateDistanceKm } from '../utils/helpers';
 import { supabase } from '../services/supabase';
 
 interface AppContextType {
@@ -1240,6 +1240,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? crypto.randomUUID()
       : `trk-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+    // Target store coordinates for distance calculation
+    const targetStore = stores.find((s) => s.id === (orderData.store_id || ''));
+    const pickupLat = targetStore?.latitude || 0.9056;
+    const pickupLng = targetStore?.longitude || 108.9868;
+
+    // Automatic nearest online driver dispatch (Perintah 5)
+    let assignedDriver: Driver | null = null;
+    let nearestDistanceKm = 0;
+    const shouldAutoDispatch =
+      adminSettings.auto_assign_driver !== false && (orderData.order_type || 'delivery') === 'delivery';
+
+    if (shouldAutoDispatch) {
+      const onlineDrivers = drivers.filter((d) => d.is_online && d.is_active !== false);
+      if (onlineDrivers.length > 0) {
+        const sorted = onlineDrivers
+          .map((d) => ({
+            driver: d,
+            dist: calculateDistanceKm(pickupLat, pickupLng, d.current_lat, d.current_lng),
+          }))
+          .sort((a, b) => a.dist - b.dist);
+
+        assignedDriver = sorted[0].driver;
+        nearestDistanceKm = sorted[0].dist;
+      }
+    }
+
+    const initialOrderStatus: OrderStatus = assignedDriver
+      ? 'DRIVER MENUJU LOKASI'
+      : orderData.order_type === 'pickup'
+      ? 'TOKO MENERIMA'
+      : 'MENUNGGU DRIVER';
+
+    const paymentMethod = orderData.payment_method || 'BANK';
+    const isCod = paymentMethod === 'COD';
+
     const newOrder: Order = {
       id: `ord-${Date.now()}`,
       order_number: orderNum,
@@ -1249,9 +1284,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       customer_name: orderData.customer_name || currentUser?.full_name || 'Pelanggan Guest',
       customer_phone: orderData.customer_phone || currentUser?.phone || '',
       store_id: orderData.store_id || '',
-      store_name: orderData.store_name || '',
-      store_phone: orderData.store_phone || '',
-      store_address: orderData.store_address || '',
+      store_name: orderData.store_name || targetStore?.name || 'Toko Singkawang',
+      store_phone: orderData.store_phone || targetStore?.whatsapp || '',
+      store_address: orderData.store_address || targetStore?.address || '',
       delivery_address: orderData.delivery_address || userLocation.address,
       delivery_lat: orderData.delivery_lat || userLocation.lat,
       delivery_lng: orderData.delivery_lng || userLocation.lng,
@@ -1263,9 +1298,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       discount_amount: orderData.discount_amount || 0,
       promo_code: orderData.promo_code,
       total_amount: orderData.total_amount || 0,
-      status: 'MENUNGGU KONFIRMASI',
+      status: initialOrderStatus,
       payment_status: 'waiting_payment',
-      payment_method: orderData.payment_method || 'BANK',
+      payment_method: paymentMethod,
+      driver_id: assignedDriver?.id,
+      driver_name: assignedDriver?.name,
+      driver_phone: assignedDriver?.phone,
+      driver_lat: assignedDriver?.current_lat,
+      driver_lng: assignedDriver?.current_lng,
+      driver_location_updated_at: assignedDriver ? new Date().toISOString() : undefined,
       notes: orderData.notes,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -1277,12 +1318,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setOrders((prev) => [newOrder, ...prev]);
 
+    // If driver was auto-assigned, update driver delivery count
+    if (assignedDriver) {
+      setDrivers((prev) =>
+        prev.map((d) =>
+          d.id === assignedDriver!.id ? { ...d, total_deliveries: d.total_deliveries + 1 } : d
+        )
+      );
+    }
+
     // Create payment entry
     const newPayment: Payment = {
       id: `pay-${Date.now()}`,
       order_id: newOrder.id,
       order_number: newOrder.order_number,
-      payment_method: orderData.payment_method || 'BANK',
+      payment_method: paymentMethod,
       payment_status: 'waiting_payment',
       amount: newOrder.total_amount,
       created_at: new Date().toISOString(),
@@ -1295,21 +1345,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       sendNotification({
         user_id: currentUser.id,
         role: 'customer',
-        title: 'Pesanan Berhasil Dibuat',
-        message: `Pesanan #${newOrder.order_number} berhasil dibuat. Silakan lakukan pembayaran.`,
+        title: assignedDriver
+          ? `Driver Ditugaskan Otomatis: ${assignedDriver.name} 🛵`
+          : 'Pesanan Berhasil Dibuat',
+        message: assignedDriver
+          ? `Driver ${assignedDriver.name} (${nearestDistanceKm.toFixed(1)} km) sedang menuju ${newOrder.store_name} untuk mengambil pesanan #${newOrder.order_number}.${isCod ? ' Siapkan uang tunai pas saat pesanan tiba.' : ''}`
+          : `Pesanan #${newOrder.order_number} berhasil dibuat. Sistem sedang menghubungkan ke driver terdekat di Singkawang.`,
         type: 'order_created',
         reference_id: newOrder.id,
       });
     }
 
-    // 2. Notify the Merchant who owns this store
-    const targetStore = stores.find((s) => s.id === newOrder.store_id);
+    // 2. Notify Assigned Driver
+    if (assignedDriver && assignedDriver.user_id) {
+      sendNotification({
+        user_id: assignedDriver.user_id,
+        role: 'driver',
+        title: 'Tugas Pengantaran Baru Otomatis 🛵',
+        message: `Sistem otomatis menugaskan Anda untuk pesanan #${newOrder.order_number} dari ${newOrder.store_name} ke ${newOrder.delivery_address}.${isCod ? ` Tagih tunai COD Rp ${newOrder.total_amount.toLocaleString('id-ID')}` : ' Pembayaran Non-Tunai'}.`,
+        type: 'driver_assigned',
+        reference_id: newOrder.id,
+      });
+    }
+
+    // 3. Notify Admin regarding order & auto-dispatch
+    sendNotification({
+      user_id: 'admin',
+      role: 'admin',
+      title: assignedDriver
+        ? `Driver ${assignedDriver.name} Ditugaskan Otomatis 🚀`
+        : 'Pesanan Baru Masuk: Menunggu Driver ⚠️',
+      message: assignedDriver
+        ? `Pesanan #${newOrder.order_number} (${newOrder.store_name}): Sistem otomatis menugaskan driver terdekat ${assignedDriver.name} (${nearestDistanceKm.toFixed(1)} km) tanpa menunggu konfirmasi admin.`
+        : `Pesanan #${newOrder.order_number} dibuat (${newOrder.store_name} ke ${newOrder.delivery_address}). Belum ada driver online aktif.`,
+      type: assignedDriver ? 'driver_assigned' : 'order_created',
+      reference_id: newOrder.id,
+    });
+
+    // 4. Notify the Merchant who owns this store
     if (targetStore && targetStore.merchant_id) {
       sendNotification({
         user_id: targetStore.merchant_id,
         role: 'merchant',
         title: 'Pesanan Baru Masuk! 🛍️',
-        message: `Pesanan baru #${newOrder.order_number} dari ${newOrder.customer_name}. Total: Rp ${newOrder.total_amount.toLocaleString('id-ID')}.`,
+        message: `Pesanan baru #${newOrder.order_number} dari ${newOrder.customer_name}. Total: Rp ${newOrder.total_amount.toLocaleString('id-ID')}.${assignedDriver ? ` Kurir ${assignedDriver.name} akan menjemput.` : ''}`,
         type: 'order_created',
         reference_id: newOrder.id,
       });
@@ -1823,6 +1902,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             qris_merchant_name: updated.qris_merchant_name,
             qris_image_url: updated.qris_image_url,
             qris_instructions: updated.qris_instructions,
+            cod_active: updated.cod_active,
+            cod_instructions: updated.cod_instructions,
+            app_logo_url: updated.app_logo_url,
+            web_logo_url: updated.web_logo_url,
+            auto_assign_driver: updated.auto_assign_driver,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'id' }
@@ -1830,7 +1914,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         // Determine specific label for success message
         let methodLabel = 'Pengaturan';
-        if (settings.bank_name !== undefined || settings.bank_active !== undefined) {
+        if (settings.app_logo_url !== undefined || settings.web_logo_url !== undefined) {
+          methodLabel = 'Pengaturan Logo & Branding';
+        } else if (settings.cod_active !== undefined || settings.cod_instructions !== undefined) {
+          methodLabel = 'Pengaturan Pembayaran COD';
+        } else if (settings.auto_assign_driver !== undefined) {
+          methodLabel = 'Pengaturan Dispatch Driver Otomatis';
+        } else if (settings.bank_name !== undefined || settings.bank_active !== undefined) {
           methodLabel = 'Pengaturan Transfer Bank';
         } else if (settings.va_provider !== undefined || settings.va_active !== undefined) {
           methodLabel = 'Pengaturan Virtual Account';

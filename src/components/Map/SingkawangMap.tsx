@@ -302,7 +302,19 @@ export const SingkawangMap: React.FC<SingkawangMapProps> = ({
       }
     });
 
+    const handleMapClick = (e: L.LeafletMouseEvent) => {
+      if (adminMode && onCoordinateChange) {
+        marker.setLatLng(e.latlng);
+        onCoordinateChange(e.latlng.lat, e.latlng.lng);
+      }
+    };
+    map.on('click', handleMapClick);
+
     adminDraggableMarkerRef.current = marker;
+
+    return () => {
+      map.off('click', handleMapClick);
+    };
   }, [adminMode, initialLat, initialLng]);
 
   // Render Markers on Map

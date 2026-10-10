@@ -216,8 +216,10 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
                   </span>
 
                   <div className="text-xs text-slate-700">
-                    <span className="font-semibold">{order.items[0]?.product_name}</span>
-                    {order.items.length > 1 && (
+                    <span className="font-semibold">
+                      {(order.items && order.items[0]?.product_name) || 'Produk Pesanan'}
+                    </span>
+                    {order.items && order.items.length > 1 && (
                       <span className="text-slate-400 font-normal">
                         {' '}
                         +{order.items.length - 1} produk lainnya

@@ -26,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     canAccessAdmin,
     userLocation,
     unreadNotificationsCount,
+    adminSettings,
   } = useApp();
 
   return (
@@ -37,20 +38,34 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             onClick={() => setActiveTab('home')}
             className="flex items-center gap-2 cursor-pointer select-none"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-600 to-sky-500 flex items-center justify-center text-white shadow-md shadow-sky-600/30 shrink-0">
-              <ShoppingBag className="w-5 h-5 text-white" />
-            </div>
+            {adminSettings.app_logo_url ? (
+              <img
+                src={adminSettings.app_logo_url}
+                alt={adminSettings.app_name || 'PAYKAJASTIP'}
+                className="w-9 h-9 rounded-xl object-contain shadow-md shadow-sky-600/20 border border-slate-200 bg-white shrink-0"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-600 to-sky-500 flex items-center justify-center text-white shadow-md shadow-sky-600/30 shrink-0">
+                <ShoppingBag className="w-5 h-5 text-white" />
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-extrabold text-base tracking-tight text-slate-900">
-                  PAYKA<span className="text-sky-600">JASTIP</span>
+                  {adminSettings.app_name ? (
+                    adminSettings.app_name
+                  ) : (
+                    <>
+                      PAYKA<span className="text-sky-600">JASTIP</span>
+                    </>
+                  )}
                 </span>
                 <span className="text-[10px] bg-sky-100 text-sky-800 font-bold px-1.5 py-0.2 rounded">
                   Singkawang
                 </span>
               </div>
               <p className="text-[10px] text-slate-500 hidden sm:block truncate">
-                Jastip, Belanja &amp; Antar Barang
+                {adminSettings.tagline || 'Jastip, Belanja & Antar Barang'}
               </p>
             </div>
           </div>

@@ -16,6 +16,7 @@ import {
   Building2,
   ShieldCheck,
   Info,
+  Banknote,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { CartItem, Order, OrderItem } from '../types';
@@ -125,10 +126,22 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
       });
     }
 
+    // E. Pembayaran COD (Bayar di Tempat)
+    if (adminSettings.cod_active !== false) {
+      list.push({
+        id: 'COD',
+        name: 'COD (Bayar di Tempat)',
+        category: 'Bayar Tunai ke Kurir / Driver',
+        recipientName: 'Kurir / Driver Payka Singkawang',
+        instructions: adminSettings.cod_instructions || 'Bayar tunai kepada driver saat pesanan tiba di lokasi Anda. Mohon siapkan uang pas sesuai total belanja.',
+        icon: Banknote,
+      });
+    }
+
     return list;
   }, [adminSettings]);
 
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'BANK' | 'VA' | 'DANA' | 'QRIS'>('BANK');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'BANK' | 'VA' | 'DANA' | 'QRIS' | 'COD'>('BANK');
 
   useEffect(() => {
     if (availablePaymentMethods.length > 0 && !availablePaymentMethods.some((m) => m.id === selectedPaymentMethod)) {

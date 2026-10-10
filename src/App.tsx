@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/layout/Header';
 import { BottomNav } from './components/layout/BottomNav';
@@ -24,13 +24,35 @@ import { SingkawangMap } from './components/Map/SingkawangMap';
 import { Store, Product, Order } from './types';
 
 const MainAppContent: React.FC = () => {
-  const { currentUser, canAccessMerchant, canAccessDriver, canAccessAdmin } = useApp();
+  const { currentUser, canAccessMerchant, canAccessDriver, canAccessAdmin, adminSettings } = useApp();
 
   const [activeTab, setActiveTab] = useState<string>('home');
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [activePaymentOrderId, setActivePaymentOrderId] = useState<string | null>(null);
+
+  // Sync title and favicon dynamically from Admin Settings (Perintah 3)
+  useEffect(() => {
+    if (adminSettings.app_name) {
+      document.title = `${adminSettings.app_name} - ${adminSettings.tagline || 'Singkawang'}`;
+    }
+    const faviconUrl = adminSettings.web_logo_url || adminSettings.app_logo_url;
+    if (faviconUrl) {
+      let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = faviconUrl;
+    }
+  }, [
+    adminSettings.app_name,
+    adminSettings.tagline,
+    adminSettings.web_logo_url,
+    adminSettings.app_logo_url,
+  ]);
 
   // Navigation handlers
   const handleSelectStore = (store: Store) => {
@@ -132,7 +154,12 @@ const MainAppContent: React.FC = () => {
         )}
 
         {/* 8. JASTIP */}
-        {activeTab === 'jastip' && <JastipPage setActiveTab={setActiveTab} />}
+        {activeTab === 'jastip' && (
+          <JastipPage
+            setActiveTab={setActiveTab}
+            onOpenOrder={handleSelectOrder}
+          />
+        )}
 
         {/* 9. ANTAR BARANG / DELIVERY */}
         {activeTab === 'delivery' && <DeliveryPage setActiveTab={setActiveTab} />}

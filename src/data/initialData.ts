@@ -73,6 +73,18 @@ export const INITIAL_SETTINGS: AdminSettings = {
     'https://images.unsplash.com/photo-1595079672139-545c0250005d?auto=format&fit=crop&w=600&q=80',
   qris_instructions:
     'Scan kode QRIS menggunakan GoPay, OVO, DANA, BCA Mobile, atau aplikasi e-wallet / mobile banking apa pun. Upload tangkapan layar bukti bayar.',
+
+  // E. Pembayaran COD (Cash On Delivery / Bayar di Tempat)
+  cod_active: true,
+  cod_instructions:
+    'Bayar tunai kepada kurir/driver saat pesanan tiba di alamat Anda. Mohon siapkan uang pas sesuai total tagihan pesanan.',
+
+  // F. Branding & Logo Website/Aplikasi
+  app_logo_url: '',
+  web_logo_url: '',
+
+  // G. Driver Dispatch Otomatis
+  auto_assign_driver: true,
 };
 
 export const INITIAL_RATES: ServiceRate[] = [
