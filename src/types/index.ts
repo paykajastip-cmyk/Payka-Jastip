@@ -143,6 +143,14 @@ export interface OrderItem {
   notes?: string;
 }
 
+export interface PaymentStatusHistoryItem {
+  status: PaymentStatus;
+  changed_at: string;
+  changed_by: string;
+  role: 'driver' | 'admin' | 'customer' | 'system';
+  note?: string;
+}
+
 export interface Order {
   id: string;
   order_number: string;
@@ -176,6 +184,11 @@ export interface Order {
   driver_lat?: number;
   driver_lng?: number;
   driver_location_updated_at?: string;
+  cod_collected_amount?: number;
+  cod_confirmed_at?: string;
+  cod_confirmed_by_driver_id?: string;
+  cod_confirmed_by_driver_name?: string;
+  payment_history?: PaymentStatusHistoryItem[];
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -185,7 +198,7 @@ export interface Payment {
   id: string;
   order_id: string;
   order_number: string;
-  payment_method: string; // 'QRIS' | 'E-WALLET' | 'TRANSFER_BANK'
+  payment_method: string; // 'QRIS' | 'E-WALLET' | 'TRANSFER_BANK' | 'COD'
   payment_status: PaymentStatus;
   amount: number;
   proof_url?: string;
@@ -194,6 +207,7 @@ export interface Payment {
   verified_at?: string;
   verified_by?: string;
   rejection_reason?: string;
+  payment_history?: PaymentStatusHistoryItem[];
   created_at: string;
   updated_at: string;
 }

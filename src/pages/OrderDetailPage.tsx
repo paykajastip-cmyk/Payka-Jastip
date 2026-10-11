@@ -278,34 +278,80 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
         </span>
       </div>
 
-      {/* COD Payment Highlight Card (Perintah 4) */}
+      {/* COD Payment Highlight Card (Perintah 4 & 5) */}
       {order.payment_method === 'COD' && (
-        <div className="p-4 bg-emerald-50 border-2 border-emerald-300 rounded-3xl shadow-xs space-y-2 animate-in fade-in">
+        <div
+          className={`p-4 rounded-3xl shadow-xs space-y-3 animate-in fade-in border-2 ${
+            order.payment_status === 'paid'
+              ? 'bg-emerald-50 border-emerald-400'
+              : 'bg-amber-50/80 border-amber-300'
+          }`}
+        >
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0">
-                <Banknote className="w-4 h-4" />
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`w-9 h-9 rounded-2xl text-white flex items-center justify-center font-bold shrink-0 shadow-xs ${
+                  order.payment_status === 'paid' ? 'bg-emerald-600' : 'bg-amber-500'
+                }`}
+              >
+                <Banknote className="w-4.5 h-4.5" />
               </div>
               <div>
-                <h4 className="text-xs font-black text-emerald-950 uppercase">
-                  Metode Pembayaran: COD (Bayar di Tempat)
+                <h4 className="text-xs font-black text-slate-900 uppercase">
+                  Metode: COD — Bayar Tunai di Tempat
                 </h4>
-                <span className="text-[10px] text-emerald-700 font-medium">
-                  Tidak perlu transfer bank. Pembayaran diserahkan langsung ke kurir.
+                <span className="text-[11px] font-medium text-slate-600 block mt-0.5">
+                  {order.payment_status === 'paid'
+                    ? 'Pembayaran berhasil dikonfirmasi oleh kurir.'
+                    : 'Bayar tunai kepada driver saat pesanan diterima.'}
                 </span>
               </div>
             </div>
-            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900">
-              TUNAI
+
+            <span
+              className={`text-[10px] font-black px-2.5 py-0.5 rounded-full ${
+                order.payment_status === 'paid'
+                  ? 'bg-emerald-200 text-emerald-900 border border-emerald-300'
+                  : 'bg-amber-200 text-amber-900 border border-amber-300 animate-pulse'
+              }`}
+            >
+              {order.payment_status === 'paid' ? 'LUNAS (PAID)' : 'BELUM DIBAYAR'}
             </span>
           </div>
 
-          <div className="p-3 bg-white/80 rounded-2xl border border-emerald-200 flex items-center justify-between">
-            <span className="text-xs text-slate-600 font-semibold">Siapkan Uang Pas Tunai:</span>
-            <span className="text-base font-black text-emerald-700">
-              {formatRupiah(order.total_amount)}
-            </span>
+          <div className="p-3 bg-white/90 rounded-2xl border border-slate-200 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] text-slate-500 font-semibold block">
+                {order.payment_status === 'paid'
+                  ? 'Jumlah Tunai Yang Diterima Driver:'
+                  : 'Siapkan Uang Pas Tunai Ke Driver:'}
+              </span>
+              <span
+                className={`text-base font-black ${
+                  order.payment_status === 'paid' ? 'text-emerald-700' : 'text-slate-900'
+                }`}
+              >
+                {formatRupiah(order.total_amount)}
+              </span>
+            </div>
+
+            {order.payment_status === 'paid' ? (
+              <div className="flex items-center gap-1 text-[11px] font-extrabold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded-xl">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Pembayaran berhasil dikonfirmasi</span>
+              </div>
+            ) : (
+              <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2.5 py-1 rounded-xl">
+                Bayar Saat Pesanan Tiba
+              </span>
+            )}
           </div>
+
+          <p className="text-[11px] text-slate-600 leading-relaxed px-1">
+            {order.payment_status === 'paid'
+              ? `Pembayaran telah resmi diterima dan dikonfirmasi oleh Driver ${order.cod_confirmed_by_driver_name || order.driver_name || 'Payka'}${order.cod_confirmed_at ? ` pada ${new Date(order.cod_confirmed_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB` : ''}. Pesanan Anda berstatus lunas.`
+              : 'Pembayaran dilakukan kepada driver saat pesanan diterima. Jangan berikan uang sebelum kurir menyerahkan barang pesanan Anda.'}
+          </p>
         </div>
       )}
 
@@ -539,7 +585,7 @@ export const OrderDetailPage: React.FC<OrderDetailPageProps> = ({
               )}
 
               <a
-                href={getGoogleMapsNavUrl(storeLat, storeLng, destLat, destLng)}
+                href={getGoogleMapsNavUrl(destLat, destLng, order.delivery_address)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-3 py-2 rounded-xl border border-slate-300 hover:bg-white text-slate-700 font-bold text-xs flex items-center gap-1.5 transition"

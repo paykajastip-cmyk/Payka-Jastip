@@ -14,6 +14,7 @@ import {
   ChevronRight,
   AlertCircle,
   ExternalLink,
+  Banknote,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Order, OrderStatus } from '../types';
@@ -31,6 +32,7 @@ export const DriverPortalPage: React.FC = () => {
     orders,
     assignDriverToOrder,
     updateOrderStatus,
+    confirmCodPaymentByDriver,
   } = useApp();
 
   const [activeDriverTab, setActiveDriverTab] = useState<'available' | 'active' | 'history'>(
@@ -40,6 +42,10 @@ export const DriverPortalPage: React.FC = () => {
     text: string;
     type: 'success' | 'error';
   } | null>(null);
+
+  // COD Cash Confirmation Modal state
+  const [codConfirmModalOrder, setCodConfirmModalOrder] = useState<Order | null>(null);
+  const [isSubmittingCod, setIsSubmittingCod] = useState(false);
 
   if (!currentDriver) {
     return (
@@ -98,6 +104,19 @@ export const DriverPortalPage: React.FC = () => {
     else if (currentStatus === 'DRIVER MENUJU CUSTOMER') nextStatus = 'SELESAI';
 
     updateOrderStatus(orderId, nextStatus);
+  };
+
+  const handleConfirmCodPayment = (order: Order) => {
+    setIsSubmittingCod(true);
+    const res = confirmCodPaymentByDriver(order.id, currentDriver.id);
+    setIsSubmittingCod(false);
+    setCodConfirmModalOrder(null);
+    if (res.success) {
+      setActionMessage({ text: res.message, type: 'success' });
+    } else {
+      setActionMessage({ text: res.message, type: 'error' });
+    }
+    setTimeout(() => setActionMessage(null), 4000);
   };
 
   return (
@@ -251,7 +270,7 @@ export const DriverPortalPage: React.FC = () => {
 
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                   <span className="text-[11px] text-slate-500">
-                    {order.items.length} jenis produk
+                    {order.items ? order.items.length : 0} jenis produk
                   </span>
 
                   <button
@@ -376,6 +395,87 @@ export const DriverPortalPage: React.FC = () => {
                   <span>Buka Rute di Google Maps</span>
                 </a>
 
+                {/* COD Payment Collection Card (Perintah 5) */}
+                {order.payment_method === 'COD' && (
+                  <div
+                    className={`p-4 rounded-2xl border space-y-3 ${
+                      order.payment_status === 'paid'
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                        : 'bg-amber-50 border-amber-300 text-amber-950'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-white shadow-xs ${
+                            order.payment_status === 'paid' ? 'bg-emerald-600' : 'bg-amber-500'
+                          }`}
+                        >
+                          <Banknote className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-wider block">
+                            TAGIHAN TUNAI COD
+                          </span>
+                          <span className="text-xs font-bold">
+                            {order.payment_status === 'paid'
+                              ? 'Uang Tunai Telah Diterima (LUNAS)'
+                              : 'Wajib Tagih Tunai ke Pelanggan'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                          order.payment_status === 'paid'
+                            ? 'bg-emerald-200 text-emerald-900'
+                            : 'bg-amber-200 text-amber-900 animate-pulse'
+                        }`}
+                      >
+                        {order.payment_status === 'paid' ? 'LUNAS (PAID)' : 'BELUM DIBAYAR'}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-white/90 rounded-xl border border-slate-200/80 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] text-slate-500 block">Jumlah Yang Harus Diterima:</span>
+                        <div className="text-base font-black text-slate-900">
+                          {formatRupiah(order.total_amount)}
+                        </div>
+                      </div>
+                      {order.payment_status === 'paid' && order.cod_confirmed_at && (
+                        <div className="text-right">
+                          <span className="text-[10px] text-emerald-600 block font-semibold">Dikonfirmasi:</span>
+                          <span className="text-[11px] font-mono font-bold text-emerald-800">
+                            {new Date(order.cod_confirmed_at).toLocaleTimeString('id-ID', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {order.payment_status !== 'paid' ? (
+                      <button
+                        type="button"
+                        onClick={() => setCodConfirmModalOrder(order)}
+                        className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs shadow-md shadow-amber-500/20 active:scale-98 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Banknote className="w-4 h-4" />
+                        <span>Konfirmasi Uang Diterima ({formatRupiah(order.total_amount)})</span>
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 font-bold bg-emerald-100/70 p-2 rounded-xl">
+                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                        <span>
+                          Uang tunai Rp {order.total_amount.toLocaleString('id-ID')} telah berhasil dikonfirmasi oleh Anda ({currentDriver.name}).
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Progression Button */}
                 <button
                   onClick={() => handleAdvanceStatus(order.id, order.status)}
@@ -425,6 +525,71 @@ export const DriverPortalPage: React.FC = () => {
               </div>
             ))
           )}
+        </div>
+      )}
+      {/* Modal Konfirmasi Uang Diterima COD */}
+      {codConfirmModalOrder && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-xl mx-auto shadow-inner">
+              💵
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-extrabold text-slate-900">
+                Konfirmasi Uang Tunai COD Diterima?
+              </h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Pastikan Anda telah menerima uang tunai pas dari pemesan sebelum mengonfirmasi pembayaran ini.
+              </p>
+            </div>
+
+            <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 text-center space-y-1">
+              <span className="text-[10px] text-amber-800 font-bold uppercase tracking-wider block">
+                Jumlah Uang Tunai Yang Diterima
+              </span>
+              <div className="text-2xl font-black text-amber-950">
+                {formatRupiah(codConfirmModalOrder.total_amount)}
+              </div>
+              <span className="text-[10px] text-slate-500 block">
+                Pesanan #{codConfirmModalOrder.order_number} • {codConfirmModalOrder.customer_name}
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl text-[11px] text-slate-600 space-y-1 border border-slate-100">
+              <div className="flex justify-between">
+                <span>Driver Penerima:</span>
+                <strong className="text-slate-800">{currentDriver.name}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Waktu Catat:</span>
+                <strong className="text-slate-800 font-mono">
+                  {new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
+                </strong>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setCodConfirmModalOrder(null)}
+                disabled={isSubmittingCod}
+                className="flex-1 py-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs transition"
+              >
+                Batal
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleConfirmCodPayment(codConfirmModalOrder)}
+                disabled={isSubmittingCod}
+                className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md shadow-emerald-600/25 active:scale-95 transition flex items-center justify-center gap-1.5"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{isSubmittingCod ? 'Menyimpan...' : 'Ya, Uang Diterima'}</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

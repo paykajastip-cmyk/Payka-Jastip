@@ -66,7 +66,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({
   // Active payment methods configured dynamically by Super Admin
   const availablePaymentMethods = useMemo(() => {
     const list: Array<{
-      id: 'BANK' | 'VA' | 'DANA' | 'QRIS';
+      id: 'BANK' | 'VA' | 'DANA' | 'QRIS' | 'COD';
       name: string;
       category: string;
       accountNumber?: string;

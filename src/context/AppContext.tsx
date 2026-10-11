@@ -9,6 +9,7 @@ import {
   OrderStatus,
   Payment,
   PaymentStatus,
+  PaymentStatusHistoryItem,
   JastipRequest,
   DeliveryRequest,
   Driver,
@@ -88,6 +89,10 @@ interface AppContextType {
   payments: Payment[];
   submitPaymentProof: (orderId: string, paymentMethod: string, proofUrl: string, proofName?: string) => void;
   verifyPayment: (paymentId: string, isApproved: boolean, rejectionReason?: string) => void;
+  confirmCodPaymentByDriver: (
+    orderId: string,
+    driverId: string
+  ) => { success: boolean; message: string };
 
   // Jastip & Delivery
   jastipRequests: JastipRequest[];
@@ -344,9 +349,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     },
   ];
 
-  const [orders, setOrders] = useState<Order[]>(() =>
-    loadStorage('orders', sampleInitialOrders)
-  );
+  const [orders, setOrders] = useState<Order[]>(() => {
+    const raw = loadStorage('orders', sampleInitialOrders);
+    if (!Array.isArray(raw)) return sampleInitialOrders;
+    return raw.map((ord: any) => ({
+      ...ord,
+      items: Array.isArray(ord?.items) ? ord.items : [],
+    }));
+  });
 
   const sampleInitialPayments: Payment[] = [
     {
@@ -1307,6 +1317,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       driver_lat: assignedDriver?.current_lat,
       driver_lng: assignedDriver?.current_lng,
       driver_location_updated_at: assignedDriver ? new Date().toISOString() : undefined,
+      payment_history: [
+        {
+          status: 'waiting_payment',
+          changed_at: new Date().toISOString(),
+          changed_by: isCod ? 'Sistem (COD Dibuat)' : (currentUser ? currentUser.full_name : 'Pelanggan'),
+          role: 'system',
+          note: isCod
+            ? 'Pesanan COD dibuat: Menunggu pembayaran tunai kepada kurir saat pesanan diterima.'
+            : 'Pesanan transfer dibuat: Menunggu pembayaran oleh pelanggan.',
+        },
+      ],
       notes: orderData.notes,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -1335,6 +1356,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       payment_method: paymentMethod,
       payment_status: 'waiting_payment',
       amount: newOrder.total_amount,
+      verified_by: undefined,
+      verified_at: undefined,
+      payment_history: [
+        {
+          status: 'waiting_payment',
+          changed_at: new Date().toISOString(),
+          changed_by: isCod ? 'Sistem COD' : (currentUser ? currentUser.full_name : 'Pelanggan'),
+          role: 'system',
+          note: isCod
+            ? 'Menunggu pelunasan tunai oleh driver di lokasi pengantaran'
+            : 'Menunggu transfer bank / QRIS',
+        },
+      ],
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -1557,12 +1591,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPayments((prev) =>
       prev.map((p) => {
         if (p.id === paymentId) {
+          const newHist: PaymentStatusHistoryItem = {
+            status: newPaymentStatus,
+            changed_at: new Date().toISOString(),
+            changed_by: currentUser ? currentUser.full_name : 'Admin Payka',
+            role: 'admin',
+            note: isApproved
+              ? 'Verifikasi transfer manual disetujui oleh admin'
+              : `Bukti transfer ditolak: ${rejectionReason || 'Bukti tidak sesuai'}`,
+          };
           return {
             ...p,
             payment_status: newPaymentStatus,
             verified_at: new Date().toISOString(),
             verified_by: currentUser ? currentUser.full_name : 'Admin Payka',
             rejection_reason: rejectionReason,
+            payment_history: [...(p.payment_history || []), newHist],
             updated_at: new Date().toISOString(),
           };
         }
@@ -1575,10 +1619,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((o) => {
         if (o.id === payment.order_id) {
           targetOrder = o;
+          const newHist: PaymentStatusHistoryItem = {
+            status: newPaymentStatus,
+            changed_at: new Date().toISOString(),
+            changed_by: currentUser ? currentUser.full_name : 'Admin Payka',
+            role: 'admin',
+            note: isApproved
+              ? 'Verifikasi transfer manual disetujui oleh admin'
+              : `Bukti transfer ditolak: ${rejectionReason || 'Bukti tidak sesuai'}`,
+          };
           return {
             ...o,
             payment_status: newPaymentStatus,
             status: isApproved ? 'TOKO MENERIMA' : o.status,
+            payment_history: [...(o.payment_history || []), newHist],
             updated_at: new Date().toISOString(),
           };
         }
@@ -1616,6 +1670,157 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       }
     }
+  };
+
+  // Driver COD cash collection confirmation (Perintah 5)
+  // Backend/context level validation:
+  // - Must be COD order
+  // - Driver must be the assigned driver for this order
+  // - Prevents double confirmation
+  // - Customers cannot call this
+  const confirmCodPaymentByDriver = (
+    orderId: string,
+    driverId: string
+  ): { success: boolean; message: string } => {
+    const order = orders.find((o) => o.id === orderId);
+    if (!order) {
+      return { success: false, message: 'Pesanan tidak ditemukan di sistem.' };
+    }
+
+    if (order.payment_method !== 'COD') {
+      return {
+        success: false,
+        message: 'Pesanan ini bukan metode COD (Cash on Delivery).',
+      };
+    }
+
+    const driver = drivers.find((d) => d.id === driverId);
+    if (!driver) {
+      return {
+        success: false,
+        message: 'Akses ditolak: Data driver pengonfirmasi tidak ditemukan.',
+      };
+    }
+
+    // Validation: driver ownership check
+    if (order.driver_id && order.driver_id !== driverId) {
+      return {
+        success: false,
+        message: `Akses ditolak: Pesanan #${order.order_number} ditugaskan kepada driver lain (${order.driver_name || 'Driver Lain'}).`,
+      };
+    }
+
+    // Validation: prevent duplicate confirmation
+    if (order.payment_status === 'paid') {
+      return {
+        success: false,
+        message: `Pembayaran pesanan #${order.order_number} sudah berstatus Lunas (PAID) sebelumnya pada ${order.cod_confirmed_at ? new Date(order.cod_confirmed_at).toLocaleTimeString('id-ID') : 'waktu sebelumnya'}. Konfirmasi ganda ditolak.`,
+      };
+    }
+
+    const confirmedAt = new Date().toISOString();
+    const histItem: PaymentStatusHistoryItem = {
+      status: 'paid',
+      changed_at: confirmedAt,
+      changed_by: `${driver.name} (${driver.vehicle_plate})`,
+      role: 'driver',
+      note: `Driver menerima uang tunai pas COD Rp ${order.total_amount.toLocaleString('id-ID')} langsung dari pelanggan saat pesanan diserahkan.`,
+    };
+
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id === orderId) {
+          return {
+            ...o,
+            payment_status: 'paid',
+            cod_collected_amount: o.total_amount,
+            cod_confirmed_at: confirmedAt,
+            cod_confirmed_by_driver_id: driver.id,
+            cod_confirmed_by_driver_name: driver.name,
+            payment_history: [...(o.payment_history || []), histItem],
+            updated_at: confirmedAt,
+          };
+        }
+        return o;
+      })
+    );
+
+    setPayments((prev) =>
+      prev.map((p) => {
+        if (p.order_id === orderId) {
+          return {
+            ...p,
+            payment_status: 'paid',
+            verified_at: confirmedAt,
+            verified_by: `Driver: ${driver.name} (${driver.vehicle_plate})`,
+            payment_history: [...(p.payment_history || []), histItem],
+            updated_at: confirmedAt,
+          };
+        }
+        return p;
+      })
+    );
+
+    // Sync to Supabase database if configured
+    if (supabase) {
+      (async () => {
+        try {
+          await supabase
+            .from('orders')
+            .update({
+              payment_status: 'paid',
+              cod_collected_amount: order.total_amount,
+              cod_confirmed_at: confirmedAt,
+              cod_confirmed_by_driver_id: driver.id,
+              cod_confirmed_by_driver_name: driver.name,
+              updated_at: confirmedAt,
+            })
+            .eq('id', orderId);
+
+          await supabase
+            .from('payments')
+            .update({
+              payment_status: 'paid',
+              verified_at: confirmedAt,
+              verified_by: `Driver: ${driver.name} (${driver.vehicle_plate})`,
+              updated_at: confirmedAt,
+            })
+            .eq('order_id', orderId);
+        } catch (dbErr) {
+          console.warn('Supabase COD confirmation update warning:', dbErr);
+        }
+      })();
+    }
+
+    // 1. Notify Customer
+    if (order.customer_id && order.customer_id !== 'guest') {
+      sendNotification({
+        user_id: order.customer_id,
+        role: 'customer',
+        title: 'Pembayaran COD Berhasil Dikonfirmasi 💵',
+        message: `Driver ${driver.name} telah menerima pembayaran tunai COD sebesar Rp ${order.total_amount.toLocaleString('id-ID')} untuk pesanan #${order.order_number}. Terima kasih!`,
+        type: 'payment_success',
+        reference_id: order.id,
+      });
+    }
+
+    // 2. Notify Admin
+    const adminUser = allUsers.find((u) => u.email.toLowerCase() === 'paykajastip@gmail.com');
+    if (adminUser) {
+      sendNotification({
+        user_id: adminUser.id,
+        role: 'admin',
+        title: 'Uang Tunai COD Diterima Driver',
+        message: `Driver ${driver.name} telah mengonfirmasi penerimaan uang tunai COD Rp ${order.total_amount.toLocaleString('id-ID')} untuk pesanan #${order.order_number}.`,
+        type: 'payment_success',
+        reference_id: order.id,
+      });
+    }
+
+    return {
+      success: true,
+      message: `Berhasil mengonfirmasi penerimaan uang tunai COD Rp ${order.total_amount.toLocaleString('id-ID')}. Status pembayaran kini LUNAS.`,
+    };
   };
 
   // Driver assignment with race-condition check
@@ -2069,6 +2274,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         payments,
         submitPaymentProof,
         verifyPayment,
+        confirmCodPaymentByDriver,
         jastipRequests,
         createJastipRequest,
         updateJastipStatus,

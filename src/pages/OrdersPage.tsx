@@ -63,7 +63,7 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
 
   const filteredOrders = userOrders.filter((o) => {
     if (filterTab === 'all') return true;
-    if (filterTab === 'unpaid') return o.payment_status === 'waiting_payment';
+    if (filterTab === 'unpaid') return o.payment_method !== 'COD' && o.payment_status === 'waiting_payment';
     if (filterTab === 'process')
       return (
         o.status === 'MENUNGGU KONFIRMASI' ||
@@ -156,8 +156,9 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
       ) : (
         <div className="space-y-3">
           {filteredOrders.map((order) => {
-            const isUnpaid = order.payment_status === 'waiting_payment';
-            const isWaitingConf = order.payment_status === 'waiting_confirmation';
+            const isCod = order.payment_method === 'COD';
+            const isUnpaid = !isCod && order.payment_status === 'waiting_payment';
+            const isWaitingConf = !isCod && order.payment_status === 'waiting_confirmation';
 
             return (
               <div
@@ -175,25 +176,39 @@ export const OrdersPage: React.FC<OrdersPageProps> = ({
 
                   <div className="flex items-center gap-1.5 flex-wrap justify-end">
                     {/* Payment Status Badge */}
-                    {order.payment_status === 'waiting_payment' && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                        Menunggu Pembayaran
-                      </span>
-                    )}
-                    {order.payment_status === 'waiting_confirmation' && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
-                        Menunggu Verifikasi Admin
-                      </span>
-                    )}
-                    {order.payment_status === 'paid' && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        Pembayaran Berhasil
-                      </span>
-                    )}
-                    {order.payment_status === 'failed' && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                        Pembayaran Ditolak
-                      </span>
+                    {isCod ? (
+                      order.payment_status === 'paid' ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-300">
+                          COD — Lunas (Diterima Kurir)
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-300">
+                          COD — Bayar Tunai ke Kurir
+                        </span>
+                      )
+                    ) : (
+                      <>
+                        {order.payment_status === 'waiting_payment' && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                            Menunggu Pembayaran
+                          </span>
+                        )}
+                        {order.payment_status === 'waiting_confirmation' && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                            Menunggu Verifikasi Admin
+                          </span>
+                        )}
+                        {order.payment_status === 'paid' && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Pembayaran Berhasil
+                          </span>
+                        )}
+                        {order.payment_status === 'failed' && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                            Pembayaran Ditolak
+                          </span>
+                        )}
+                      </>
                     )}
 
                     <span

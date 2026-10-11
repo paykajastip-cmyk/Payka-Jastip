@@ -186,7 +186,11 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
       {/* Status Banner */}
       <div
         className={`p-4 rounded-3xl border flex items-start gap-3 ${
-          paymentStatus === 'paid'
+          order.payment_method === 'COD'
+            ? paymentStatus === 'paid'
+              ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+              : 'bg-amber-50 border-amber-300 text-amber-950'
+            : paymentStatus === 'paid'
             ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
             : paymentStatus === 'waiting_confirmation'
             ? 'bg-amber-50 border-amber-200 text-amber-900'
@@ -195,7 +199,13 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
             : 'bg-sky-50 border-sky-200 text-sky-900'
         }`}
       >
-        {paymentStatus === 'paid' ? (
+        {order.payment_method === 'COD' ? (
+          paymentStatus === 'paid' ? (
+            <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
+          ) : (
+            <Clock className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
+          )
+        ) : paymentStatus === 'paid' ? (
           <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
         ) : paymentStatus === 'waiting_confirmation' ? (
           <Clock className="w-6 h-6 text-amber-600 shrink-0 mt-0.5 animate-spin" />
@@ -207,7 +217,11 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
 
         <div>
           <h3 className="text-sm font-bold">
-            {paymentStatus === 'paid'
+            {order.payment_method === 'COD'
+              ? paymentStatus === 'paid'
+                ? 'COD — Pembayaran Berhasil Dikonfirmasi'
+                : 'COD — Bayar Tunai di Tempat'
+              : paymentStatus === 'paid'
               ? 'Pembayaran Terverifikasi (PAID)'
               : paymentStatus === 'waiting_confirmation'
               ? 'Menunggu Konfirmasi Admin'
@@ -216,7 +230,11 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
               : 'Menunggu Pembayaran Manual'}
           </h3>
           <p className="text-xs mt-0.5 leading-relaxed opacity-90">
-            {paymentStatus === 'paid'
+            {order.payment_method === 'COD'
+              ? paymentStatus === 'paid'
+                ? 'Pembayaran tunai telah diterima dan dikonfirmasi lunas oleh kurir saat pesanan diserahkan.'
+                : 'Pembayaran dilakukan kepada driver saat pesanan diterima. Anda tidak perlu mentransfer dana sekarang — siapkan uang tunai pas untuk dibayarkan langsung ke driver.'
+              : paymentStatus === 'paid'
               ? `Pembayaran telah diverifikasi oleh Admin (${payment?.verified_by || 'Admin'}). Pesanan diproses ke toko.`
               : paymentStatus === 'waiting_confirmation'
               ? 'Bukti transfer sudah dikirim. Admin PAYKAJASTIP sedang memeriksa mutasi rekening.'
@@ -238,8 +256,44 @@ export const PaymentPage: React.FC<PaymentPageProps> = ({
         </p>
       </div>
 
-      {/* Check if Admin configured payment */}
-      {activePaymentMethods.length === 0 ? (
+      {/* Check if Order is COD */}
+      {order.payment_method === 'COD' ? (
+        <div className="bg-white rounded-3xl border border-emerald-200 p-5 space-y-4 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-lg shrink-0">
+              💵
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-slate-900 uppercase">
+                Metode COD (Cash On Delivery)
+              </h4>
+              <p className="text-xs text-slate-500">
+                Pembayaran dilakukan langsung ke Driver / Kurir saat pesanan tiba.
+              </p>
+            </div>
+          </div>
+
+          <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-2 text-xs text-emerald-950">
+            <span className="font-bold block">Petunjuk Pembayaran COD:</span>
+            <ul className="list-disc list-inside space-y-1 text-[11px] leading-relaxed">
+              <li>Driver kami sedang memproses dan mengantarkan pesanan Anda ke alamat tujuan.</li>
+              <li>Mohon siapkan uang tunai pas sebesar <strong>{formatRupiah(order.total_amount)}</strong>.</li>
+              <li>Berikan uang tunai kepada kurir saat barang Anda diterima.</li>
+            </ul>
+          </div>
+
+          <div className="pt-2 flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs active:scale-98 transition flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Check className="w-4 h-4" />
+              <span>Lihat Detail & Lacak Kurir</span>
+            </button>
+          </div>
+        </div>
+      ) : activePaymentMethods.length === 0 ? (
         <div className="p-6 bg-amber-50 rounded-3xl border border-amber-200 text-center space-y-3">
           <AlertCircle className="w-8 h-8 text-amber-600 mx-auto" />
           <div>

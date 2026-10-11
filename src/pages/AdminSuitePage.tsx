@@ -758,6 +758,7 @@ export const AdminSuitePage: React.FC = () => {
   const filteredPayments = useMemo(() => {
     return payments.filter((p) => {
       if (paymentFilter === 'all') return true;
+      if (paymentFilter === 'cod') return p.payment_method === 'COD';
       return p.payment_status === paymentFilter;
     });
   }, [payments, paymentFilter]);
@@ -1207,14 +1208,15 @@ export const AdminSuitePage: React.FC = () => {
             <div className="flex items-center gap-1 overflow-x-auto no-scrollbar text-xs">
               {[
                 { id: 'all', label: 'Semua' },
-                { id: 'waiting_confirmation', label: 'Menunggu' },
+                { id: 'waiting_confirmation', label: 'Menunggu Verifikasi' },
                 { id: 'paid', label: 'Lunas (Paid)' },
+                { id: 'cod', label: 'COD (Tunai)' },
                 { id: 'failed', label: 'Ditolak' },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setPaymentFilter(tab.id)}
-                  className={`px-3 py-1.5 rounded-xl font-bold transition text-xs whitespace-nowrap ${
+                  className={`px-3 py-1.5 rounded-xl font-bold transition text-xs whitespace-nowrap cursor-pointer ${
                     paymentFilter === tab.id
                       ? 'bg-slate-900 text-white'
                       : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
@@ -1236,7 +1238,7 @@ export const AdminSuitePage: React.FC = () => {
                 key={pay.id}
                 className="bg-white rounded-3xl border border-slate-200 p-4 space-y-3 shadow-2xs"
               >
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-xs font-bold text-slate-700">
                       #{pay.order_number}
@@ -1244,11 +1246,16 @@ export const AdminSuitePage: React.FC = () => {
                     <span className="text-[10px] text-slate-400 font-medium">
                       {formatIndoDate(pay.created_at)}
                     </span>
+                    {pay.payment_method === 'COD' && (
+                      <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                        CASH ON DELIVERY
+                      </span>
+                    )}
                   </div>
                   <span
                     className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                       pay.payment_status === 'paid'
-                        ? 'bg-emerald-100 text-emerald-800'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                         : pay.payment_status === 'waiting_confirmation'
                         ? 'bg-amber-100 text-amber-800 animate-pulse'
                         : pay.payment_status === 'failed'
@@ -1258,28 +1265,56 @@ export const AdminSuitePage: React.FC = () => {
                   >
                     {pay.payment_status === 'waiting_confirmation'
                       ? 'MENUNGGU VERIFIKASI'
+                      : pay.payment_status === 'waiting_payment'
+                      ? (pay.payment_method === 'COD' ? 'BELUM DIBAYAR (TUNAI SAAT TIBA)' : 'MENUNGGU PEMBAYARAN')
                       : pay.payment_status.toUpperCase()}
                   </span>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-4 items-start justify-between">
-                  <div>
+                  <div className="space-y-1">
                     <span className="text-[10px] text-slate-400 block">Jumlah Tagihan:</span>
                     <span className="text-xl font-black text-sky-600">
                       {formatRupiah(pay.amount)}
                     </span>
-                    <p className="text-xs text-slate-600 mt-1">
-                      Metode Transfer: <strong className="text-slate-800">{pay.payment_method}</strong>
+                    <p className="text-xs text-slate-600">
+                      Metode Pembayaran: <strong className="text-slate-800">{pay.payment_method === 'COD' ? 'COD (Bayar Tunai di Tempat)' : pay.payment_method}</strong>
                     </p>
+                    {pay.payment_method === 'COD' && pay.payment_status !== 'paid' && (
+                      <p className="text-[11px] text-amber-800 font-semibold bg-amber-50 p-2 rounded-xl border border-amber-200">
+                        Tagihan tunai akan diserahkan pelanggan langsung kepada Driver saat pesanan tiba di alamat. Belum masuk ke pendapatan terealisasi.
+                      </p>
+                    )}
                     {pay.rejection_reason && (
-                      <p className="text-[11px] text-rose-600 font-semibold mt-1 bg-rose-50 p-2 rounded-xl">
+                      <p className="text-[11px] text-rose-600 font-semibold bg-rose-50 p-2 rounded-xl">
                         Alasan Ditolak: {pay.rejection_reason}
                       </p>
                     )}
                     {pay.verified_by && (
-                      <p className="text-[10px] text-emerald-600 font-semibold mt-1">
-                        Diverifikasi oleh: {pay.verified_by}
+                      <p className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-1 rounded-lg inline-block">
+                        Diverifikasi / Diterima oleh: {pay.verified_by}
                       </p>
+                    )}
+
+                    {/* Riwayat Perubahan Status Pembayaran */}
+                    {pay.payment_history && pay.payment_history.length > 0 && (
+                      <div className="pt-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                          Riwayat Perubahan Status:
+                        </span>
+                        <div className="space-y-1 mt-1">
+                          {pay.payment_history.map((h, hIdx) => (
+                            <div key={hIdx} className="text-[10px] text-slate-500 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100 flex items-center justify-between gap-2">
+                              <span>
+                                <strong className="text-slate-700">{h.status.toUpperCase()}</strong> by {h.changed_by}: {h.note || ''}
+                              </span>
+                              <span className="font-mono text-slate-400 shrink-0">
+                                {new Date(h.changed_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
 
@@ -1385,9 +1420,38 @@ export const AdminSuitePage: React.FC = () => {
                   className="bg-white rounded-3xl border border-slate-200 p-4 space-y-3 text-xs shadow-2xs"
                 >
                   <div className="flex justify-between items-center pb-2 border-b border-slate-100 flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono font-bold text-slate-700">#{ord.order_number}</span>
                       <span className="text-[10px] text-slate-400">{formatIndoDate(ord.created_at)}</span>
+
+                      {/* Payment Status Tag */}
+                      {ord.payment_method === 'COD' ? (
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            ord.payment_status === 'paid'
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : 'bg-amber-100 text-amber-900 border border-amber-300'
+                          }`}
+                        >
+                          {ord.payment_status === 'paid'
+                            ? `COD LUNAS (Diterima Driver ${ord.cod_confirmed_by_driver_name || ''})`
+                            : 'COD BELUM DIBAYAR (Tunai saat tiba)'}
+                        </span>
+                      ) : (
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            ord.payment_status === 'paid'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : ord.payment_status === 'waiting_confirmation'
+                              ? 'bg-amber-100 text-amber-800 animate-pulse'
+                              : ord.payment_status === 'failed'
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {ord.payment_method || 'TRANSFER'}: {ord.payment_status.toUpperCase()}
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -2873,27 +2937,41 @@ export const AdminSuitePage: React.FC = () => {
               </div>
 
               <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                <span className="text-[10px] text-slate-500 font-bold block uppercase">Total Omset Selesai</span>
+                <span className="text-[10px] text-slate-500 font-bold block uppercase">Pendapatan Real Selesai (Lunas)</span>
                 <span className="text-base font-black text-slate-900">
                   {formatRupiah(
                     orders
-                      .filter((o) => o.status === 'SELESAI')
+                      .filter((o) => o.payment_status === 'paid')
                       .reduce((sum, o) => sum + o.total_amount, 0)
                   )}
                 </span>
-              </div>
-
-              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                <span className="text-[10px] text-slate-500 font-bold block uppercase">Total Ongkir Terdistribusi</span>
-                <span className="text-base font-black text-sky-600">
-                  {formatRupiah(orders.reduce((sum, o) => sum + o.delivery_fee, 0))}
+                <span className="text-[9px] text-emerald-600 font-semibold block mt-0.5">
+                  Termasuk transfer lunas &amp; COD terkonfirmasi
                 </span>
               </div>
 
               <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
-                <span className="text-[10px] text-slate-500 font-bold block uppercase">Total Biaya Layanan</span>
+                <span className="text-[10px] text-slate-500 font-bold block uppercase">Tagihan COD Berjalan (Belum Lunas)</span>
+                <span className="text-base font-black text-amber-700">
+                  {formatRupiah(
+                    orders
+                      .filter((o) => o.payment_method === 'COD' && o.payment_status !== 'paid')
+                      .reduce((sum, o) => sum + o.total_amount, 0)
+                  )}
+                </span>
+                <span className="text-[9px] text-amber-700 font-semibold block mt-0.5">
+                  {orders.filter((o) => o.payment_method === 'COD' && o.payment_status !== 'paid').length} order menanti uang tunai
+                </span>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                <span className="text-[10px] text-slate-500 font-bold block uppercase">Total Biaya Layanan Terealisasi</span>
                 <span className="text-base font-black text-amber-600">
-                  {formatRupiah(orders.reduce((sum, o) => sum + o.service_fee, 0))}
+                  {formatRupiah(
+                    orders
+                      .filter((o) => o.payment_status === 'paid')
+                      .reduce((sum, o) => sum + o.service_fee, 0)
+                  )}
                 </span>
               </div>
             </div>

@@ -208,7 +208,7 @@ export const JastipPage: React.FC<JastipPageProps> = ({ setActiveTab, onOpenOrde
       );
 
       // 2. Create Order entry (triggers automatic driver assignment without waiting for admin)
-      const orderRes = createOrder({
+      const orderRes = await createOrder({
         customer_id: currentUser?.id || 'guest',
         customer_name: name,
         customer_phone: phone,
